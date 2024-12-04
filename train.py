@@ -23,7 +23,7 @@ def get_device(local_rank):
 def load_data(device, batch_size=64, is_distributed=False):
     data_path = "./data/DL24FA"
 
-    train_dataset = create_wall_dataset(
+    train_dataset = create_wall_dataloader(
         data_path=f"{data_path}/train",
         probing=False,
         device=device,
