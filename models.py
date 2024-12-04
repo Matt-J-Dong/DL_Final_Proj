@@ -97,7 +97,10 @@ class JEPA_Model(nn.Module):
     def forward(self, states, actions):
         """
         Args:
-            states: [B, 1, Ch, H, W]
+            During training:
+                states: [B, T, Ch, H, W]
+            During inference:
+                states: [B, 1, Ch, H, W]
             actions: [B, T-1, 2]
 
         Output:
