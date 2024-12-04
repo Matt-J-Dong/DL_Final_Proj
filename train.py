@@ -24,24 +24,30 @@ def get_device(local_rank):
 def load_data(device, batch_size=64, is_distributed=False):
     data_path = "./data/DL24FA"
 
-    train_dataset = create_wall_dataloader(
+    train_loader = create_wall_dataloader(
         data_path=f"{data_path}/train",
         probing=False,
         device=device,
         train=True,
+        batch_size=batch_size,  # Ensure batch_size is set here
+        shuffle=False  # Disable shuffling here
     )
+
+    # Access the dataset from the DataLoader
+    train_dataset = train_loader.dataset
 
     if is_distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+        # Re-create DataLoader with the distributed sampler
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            sampler=train_sampler,
+        )
     else:
         train_sampler = None
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=(train_sampler is None),
-        sampler=train_sampler,
-    )
+        # If not distributed, use the original DataLoader
+        train_loader = train_loader
 
     return train_loader, train_sampler
 
