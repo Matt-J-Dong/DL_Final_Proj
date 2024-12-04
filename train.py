@@ -4,19 +4,20 @@ import torch.optim as optim
 from tqdm.auto import tqdm
 import torch.distributed as dist
 import torch.multiprocessing as mp
-import argparse
+import os  # Import os to access environment variables
 
 from dataset import create_wall_dataloader
 from models import JEPA_Model
 from evaluator import ProbingEvaluator
-import os
+import os  # Already imported
 
 
 def get_device(local_rank):
     """Set the device for distributed training."""
+    print(f"Process {local_rank} is setting up its device.")
     torch.cuda.set_device(local_rank)
     device = torch.device(f'cuda:{local_rank}')
-    print(f"Using device: {device}")
+    print(f"Process {local_rank} using device: {device}")
     return device
 
 
@@ -111,13 +112,12 @@ def train_model(
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--local_rank', type=int, default=0)
-    args = parser.parse_args()
-    main_worker(args.local_rank, args)
+    # Get local_rank from environment variable
+    local_rank = int(os.environ["LOCAL_RANK"])
+    main_worker(local_rank)
 
 
-def main_worker(local_rank, args):
+def main_worker(local_rank):
     dist.init_process_group(backend='nccl')
 
     device = get_device(local_rank)
@@ -135,7 +135,9 @@ def main_worker(local_rank, args):
     model.to(device)
 
     # Wrap the model with DistributedDataParallel
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
+    model = torch.nn.parallel.DistributedDataParallel(
+        model, device_ids=[local_rank], output_device=local_rank
+    )
 
     # Train the model
     trained_model = train_model(
