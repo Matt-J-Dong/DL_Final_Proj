@@ -106,7 +106,7 @@ class JEPA_Model(nn.Module):
         Output:
             predictions: [B, T, D]
         """
-        B, 1, C, H, W = states.shape
+        B, T, C, H, W = states.shape
         device = states.device
         # Initialize list to store predicted representations
         pred_encs = []

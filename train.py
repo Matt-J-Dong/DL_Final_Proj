@@ -1,35 +1,48 @@
-# train.py
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from tqdm.auto import tqdm
+import torch.distributed as dist
+import torch.multiprocessing as mp
+import argparse
 
-from dataset import create_wall_dataloader
+from dataset import create_wall_dataset
 from models import JEPA_Model
 from evaluator import ProbingEvaluator
 import os
 
 
-def get_device():
-    """Check for GPU availability."""
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("Using device:", device)
+def get_device(local_rank):
+    """Set the device for distributed training."""
+    torch.cuda.set_device(local_rank)
+    device = torch.device('cuda', local_rank)
+    print(f"Using device: {device}")
     return device
 
 
-def load_data(device, batch_size=64):
+def load_data(device, batch_size=128, is_distributed=False):
     data_path = "./data/DL24FA"
 
-    train_ds = create_wall_dataloader(
+    train_dataset = create_wall_dataset(
         data_path=f"{data_path}/train",
         probing=False,
         device=device,
-        batch_size=batch_size,
         train=True,
     )
 
-    return train_ds
+    if is_distributed:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+    else:
+        train_sampler = None
+
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=(train_sampler is None),
+        sampler=train_sampler,
+    )
+
+    return train_loader, train_sampler
 
 
 def save_model(model, epoch, save_path="checkpoints"):
@@ -48,21 +61,26 @@ def train_model(
     learning_rate=1e-3,
     momentum=0.99,
     save_every=1,
+    train_sampler=None
 ):
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    model = model.to(device)
     model.train()
 
+    rank = dist.get_rank()
+
     for epoch in range(1, num_epochs + 1):
+        if train_sampler is not None:
+            train_sampler.set_epoch(epoch)
         epoch_loss = 0.0
-        for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
+
+        for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}", disable=(rank != 0))):
             states = batch.states.to(device)  # [B, T, 2, 64, 64]
             actions = batch.actions.to(device)  # [B, T-1, 2]
 
             # Perform a training step
-            loss = model.train_step(
+            loss = model.module.train_step(
                 states=states,
                 actions=actions,
                 criterion=criterion,
@@ -73,34 +91,51 @@ def train_model(
             epoch_loss += loss
 
             # Debugging print statements
-            if batch_idx % 100 == 0:
+            if batch_idx % 100 == 0 and rank == 0:
                 print(
                     f"Epoch [{epoch}/{num_epochs}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}"
                 )
 
         avg_epoch_loss = epoch_loss / len(train_loader)
-        print(f"Epoch [{epoch}/{num_epochs}] Average Loss: {avg_epoch_loss:.4f}")
+        if rank == 0:
+            print(f"Epoch [{epoch}/{num_epochs}] Average Loss: {avg_epoch_loss:.4f}")
 
         # Save model checkpoint
-        if epoch % save_every == 0:
-            save_model(model, epoch)
+        if epoch % save_every == 0 and rank == 0:
+            save_model(model.module, epoch)
 
-    print("Training completed.")
+    if rank == 0:
+        print("Training completed.")
+
     return model
 
 
-if __name__ == "__main__":
-    device = get_device()
-    batch_size = 64
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--local_rank', type=int, default=0)
+    args = parser.parse_args()
+    main_worker(args.local_rank, args)
+
+
+def main_worker(local_rank, args):
+    dist.init_process_group(backend='nccl', init_method='env://')
+
+    device = get_device(local_rank)
+
+    batch_size = 128
     num_epochs = 10
     learning_rate = 1e-3
     momentum = 0.99
 
     # Load data
-    train_loader = load_data(device, batch_size=batch_size)
+    train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=True)
 
     # Initialize the JEPA model
     model = JEPA_Model(device=device, repr_dim=256, action_dim=2)
+    model.to(device)
+
+    # Wrap the model with DistributedDataParallel
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
 
     # Train the model
     trained_model = train_model(
@@ -111,7 +146,13 @@ if __name__ == "__main__":
         learning_rate=learning_rate,
         momentum=momentum,
         save_every=1,
+        train_sampler=train_sampler
     )
 
-    # Optionally, save the final model
-    save_model(trained_model, "final")
+    # Optionally, save the final model (only on rank 0)
+    if dist.get_rank() == 0:
+        save_model(trained_model.module, "final")
+
+
+if __name__ == "__main__":
+    main()
