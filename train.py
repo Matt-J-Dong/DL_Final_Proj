@@ -15,7 +15,7 @@ import os
 def get_device(local_rank):
     """Set the device for distributed training."""
     torch.cuda.set_device(local_rank)
-    device = torch.device('cuda', local_rank)
+    device = torch.device(f'cuda:{local_rank}')
     print(f"Using device: {device}")
     return device
 
@@ -118,7 +118,7 @@ def main():
 
 
 def main_worker(local_rank, args):
-    dist.init_process_group(backend='nccl', init_method='env://')
+    dist.init_process_group(backend='nccl')
 
     device = get_device(local_rank)
 
@@ -135,7 +135,7 @@ def main_worker(local_rank, args):
     model.to(device)
 
     # Wrap the model with DistributedDataParallel
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
 
     # Train the model
     trained_model = train_model(
