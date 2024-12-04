@@ -30,7 +30,6 @@ def load_data(device, batch_size=64, is_distributed=False):
         device=device,
         train=True,
         batch_size=batch_size,  # Ensure batch_size is set here
-        shuffle=False  # Disable shuffling here
     )
 
     # Access the dataset from the DataLoader
