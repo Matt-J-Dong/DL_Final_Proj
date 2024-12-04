@@ -6,7 +6,7 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 import argparse
 
-from dataset import create_wall_dataset
+from dataset import create_wall_dataloader
 from models import JEPA_Model
 from evaluator import ProbingEvaluator
 import os
@@ -20,7 +20,7 @@ def get_device(local_rank):
     return device
 
 
-def load_data(device, batch_size=128, is_distributed=False):
+def load_data(device, batch_size=64, is_distributed=False):
     data_path = "./data/DL24FA"
 
     train_dataset = create_wall_dataset(
