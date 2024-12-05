@@ -22,36 +22,6 @@ def get_device(local_rank):
     print(f"Process {local_rank} using device: {device}")
     return device
 
-
-# def load_data(device, batch_size=64, is_distributed=False):
-#     data_path = "./data/DL24FA"
-
-#     train_loader = create_wall_dataloader(
-#         data_path=f"{data_path}/train",
-#         probing=False,
-#         device=device,
-#         train=True,
-#         batch_size=batch_size,  # Ensure batch_size is set here
-#     )
-
-#     # Access the dataset from the DataLoader
-#     train_dataset = train_loader.dataset
-
-#     if is_distributed:
-#         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-#         # Re-create DataLoader with the distributed sampler
-#         train_loader = torch.utils.data.DataLoader(
-#             train_dataset,
-#             batch_size=batch_size,
-#             sampler=train_sampler,
-#         )
-#     else:
-#         train_sampler = None
-#         # If not distributed, use the original DataLoader
-#         train_loader = train_loader
-
-#     return train_loader, train_sampler
-
 def load_data(device, batch_size=64, is_distributed=False, subset_size=1000):
     data_path = "./data/DL24FA"
 
@@ -170,12 +140,14 @@ def main_worker(local_rank):
     num_epochs = 10
     learning_rate = 1e-3
     momentum = 0.99
+    r = 4 #lora rank
+    alpha = 1.0 #lora scaling factor
 
     # Load data
     train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=True)
 
     # Initialize the JEPA model
-    model = JEPA_Model(device=device, repr_dim=256, action_dim=2)
+    model = JEPA_Model(device=device, repr_dim=256, action_dim=2,r=r, alpha=alpha)
     model.to(device)
 
     # Wrap the model with DistributedDataParallel
