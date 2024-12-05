@@ -43,33 +43,6 @@ class Encoder(nn.Module):
         x = x.view(x.size(0), -1)  # [B, C * H * W]
         x = self.fc(x)  # [B, output_dim]
         return x  # [B, D]
-# class Encoder(nn.Module):
-#     def __init__(self, output_dim=256, r=4, alpha=1.0):
-#         super(Encoder, self).__init__()
-#         # Define the CNN encoder
-#         self.conv1 = nn.Conv2d(2, 32, kernel_size=3, stride=2, padding=1)
-#         self.bn1 = nn.BatchNorm2d(32)
-#         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1)
-#         self.bn2 = nn.BatchNorm2d(64)
-#         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1)
-#         self.bn3 = nn.BatchNorm2d(128)
-#         self.conv4 = nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)
-#         self.bn4 = nn.BatchNorm2d(256)
-#         self.relu = nn.ReLU()
-
-#         # Fully connected layer with LoRA
-#         self.fc_input_dim = 256 * 5 * 5  # Adjust based on input size
-#         self.fc = LoRALinear(self.fc_input_dim, output_dim, r=r, alpha=alpha)
-
-#     def forward(self, x):
-#         # x: [B, 2, H, W]
-#         x = self.relu(self.bn1(self.conv1(x)))
-#         x = self.relu(self.bn2(self.conv2(x)))
-#         x = self.relu(self.bn3(self.conv3(x)))
-#         x = self.relu(self.bn4(self.conv4(x)))
-#         x = x.view(x.size(0), -1)
-#         x = self.fc(x)
-#         return x
 
 
 class Predictor(nn.Module):
@@ -90,22 +63,7 @@ class Predictor(nn.Module):
         x = self.fc2(x)  # [B, output_dim]
         #print(f"Predictor output shape: {x.shape}")  # Debugging
         return x  # [B, D]
-# class Predictor(nn.Module):
-#     def __init__(self, input_dim, output_dim, r=4, alpha=1.0):
-#         super(Predictor, self).__init__()
-#         # input_dim = state_dim + action_dim
-#         self.fc1 = LoRALinear(input_dim, output_dim, r=r, alpha=alpha)
-#         self.bn1 = nn.BatchNorm1d(output_dim)
-#         self.relu = nn.ReLU()
-#         self.fc2 = LoRALinear(output_dim, output_dim, r=r, alpha=alpha)
 
-#     def forward(self, s_prev, u_prev):
-#         x = torch.cat([s_prev, u_prev], dim=-1)
-#         x = self.fc1(x)
-#         x = self.bn1(x)
-#         x = self.relu(x)
-#         x = self.fc2(x)
-#         return x
 
 
 class JEPA_Model(nn.Module):
