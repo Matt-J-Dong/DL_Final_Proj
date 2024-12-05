@@ -94,7 +94,7 @@ def train_model(
             states = batch.states.to(device)  # [B, T, 2, 64, 64]
             actions = batch.actions.to(device)  # [B, T-1, 2]
 
-            print(f"Initial state shape: {states[:, 0].shape}")
+            #print(f"Initial state shape: {states[:, 0].shape}") --> debug
 
             # Perform a training step
             loss = model.module.train_step(
