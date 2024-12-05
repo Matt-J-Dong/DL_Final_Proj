@@ -156,7 +156,7 @@ def main_worker(local_rank):
 
     # Wrap the model with DistributedDataParallel
     model = torch.nn.parallel.DistributedDataParallel(
-        model, device_ids=[local_rank], output_device=f'cuda:{local_rank}'
+        model, device_ids=[local_rank], output_device=local_rank
     )
 
     # Train the model
