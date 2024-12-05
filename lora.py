@@ -3,6 +3,7 @@
 import torch
 import torch.nn as nn
 import math
+from torch.nn import functional as F
 
 class LoRALinear(nn.Module):
     def __init__(self, in_features, out_features, r=4, alpha=1.0):
