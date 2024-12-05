@@ -114,10 +114,10 @@ class JEPA_Model(nn.Module):
         self.device = device
         self.repr_dim = repr_dim
         self.action_dim = action_dim
-        self.encoder = Encoder(output_dim=repr_dim, r=r, alpha=alpha)
-        self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim, r=r, alpha=alpha)
+        self.encoder = Encoder(output_dim=repr_dim)
+        self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim)
         # For simplicity, using the same architecture for target encoder
-        self.target_encoder = Encoder(output_dim=repr_dim, r=r, alpha=alpha)
+        self.target_encoder = Encoder(output_dim=repr_dim)
         # Initialize target encoder with same weights as encoder
         self.target_encoder.load_state_dict(self.encoder.state_dict())
         # Freeze target encoder parameters
