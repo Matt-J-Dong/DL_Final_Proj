@@ -106,26 +106,46 @@ class JEPA_Model(nn.Module):
         Output:
             predictions: [B, T, D]
         """
-        B, T, C, H, W = states.shape
+        # B, T, C, H, W = states.shape
+        # device = states.device
+        # # Initialize list to store predicted representations
+        # pred_encs = []
+
+        # # Get initial representation s_0
+        # o_0 = states[:, 0]  # [B, Ch, H, W]
+        # s_0 = self.encoder(o_0)  # [B, D]
+        # pred_encs.append(s_0)
+
+        # s_prev = s_0
+
+        # for t in range(1, T):
+        #     u_prev = actions[:, t - 1]  # [B, action_dim]
+        #     s_pred = self.predictor(s_prev, u_prev)  # [B, D]
+        #     pred_encs.append(s_pred)
+        #     s_prev = s_pred
+
+        # # Stack pred_encs into [B, T, D]
+        # pred_encs = torch.stack(pred_encs, dim=1)  # [B, T, D]
+
+        # return pred_encs
+        B, T_s, C, H, W = states.shape  # T_s may be 1
+        T_a = actions.shape[1]          # Number of actions (time steps)
         device = states.device
-        # Initialize list to store predicted representations
+
+        # Get initial representation s_prev
+        o_0 = states[:, 0]  # [B, C, H, W]
+        s_prev = self.encoder(o_0)  # [B, D]
+
         pred_encs = []
 
-        # Get initial representation s_0
-        o_0 = states[:, 0]  # [B, Ch, H, W]
-        s_0 = self.encoder(o_0)  # [B, D]
-        pred_encs.append(s_0)
-
-        s_prev = s_0
-
-        for t in range(1, T):
-            u_prev = actions[:, t - 1]  # [B, action_dim]
+        for t in range(T_a):
+            u_prev = actions[:, t]        # [B, action_dim]
             s_pred = self.predictor(s_prev, u_prev)  # [B, D]
             pred_encs.append(s_pred)
             s_prev = s_pred
 
-        # Stack pred_encs into [B, T, D]
-        pred_encs = torch.stack(pred_encs, dim=1)  # [B, T, D]
+        # Stack pred_encs into [B, T_a, D]
+        pred_encs = torch.stack(pred_encs, dim=1)  # [B, T_a, D]
 
         return pred_encs
 
@@ -138,28 +158,67 @@ class JEPA_Model(nn.Module):
             criterion: loss function
             optimizer: optimizer
         """
-        B, T, C, H, W = states.shape
+        # B, T, C, H, W = states.shape
+        # device = states.device
+
+        # # Get initial representation s_0
+        # o_0 = states[:, 0]  # [B, Ch, H, W]
+        # s_0 = self.encoder(o_0)  # [B, D]
+        # s_prev = s_0
+
+        # total_loss = 0
+
+        # for t in range(1, T):
+        #     o_n = states[:, t]  # [B, Ch, H, W]
+        #     s_target = self.target_encoder(o_n)  # [B, D]
+
+        #     u_prev = actions[:, t - 1]  # [B, action_dim]
+        #     s_pred = self.predictor(s_prev, u_prev)  # [B, D]
+
+        #     # Compute loss between s_pred and s_target
+        #     loss = criterion(s_pred, s_target)
+        #     total_loss += loss
+
+        #     s_prev = s_pred
+
+        # # Backpropagation
+        # optimizer.zero_grad()
+        # total_loss.backward()
+        # optimizer.step()
+
+        # # Update target encoder
+        # with torch.no_grad():
+        #     for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
+        #         param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
+
+        # #print(f"Training step loss: {total_loss.item()}")  # Debugging
+
+        # return total_loss.item()
+        B, T_s, C, H, W = states.shape
+        T_a = actions.shape[1]
         device = states.device
 
-        # Get initial representation s_0
-        o_0 = states[:, 0]  # [B, Ch, H, W]
-        s_0 = self.encoder(o_0)  # [B, D]
-        s_prev = s_0
+        # Get initial representation s_prev
+        o_0 = states[:, 0]  # [B, C, H, W]
+        s_prev = self.encoder(o_0)  # [B, D]
 
         total_loss = 0
+        s_preds = []
+        s_targets = []
 
-        for t in range(1, T):
-            o_n = states[:, t]  # [B, Ch, H, W]
-            s_target = self.target_encoder(o_n)  # [B, D]
-
-            u_prev = actions[:, t - 1]  # [B, action_dim]
+        for t in range(T_a):
+            o_n = states[:, t + 1] if t + 1 < T_s else None  # [B, C, H, W] or None
+            u_prev = actions[:, t]  # [B, action_dim]
             s_pred = self.predictor(s_prev, u_prev)  # [B, D]
 
-            # Compute loss between s_pred and s_target
-            loss = criterion(s_pred, s_target)
-            total_loss += loss
+            if o_n is not None:
+                s_target = self.target_encoder(o_n)  # [B, D]
+                loss = criterion(s_pred, s_target)
+                total_loss += loss
+                s_targets.append(s_target)
 
             s_prev = s_pred
+            s_preds.append(s_pred)
 
         # Backpropagation
         optimizer.zero_grad()
@@ -170,8 +229,6 @@ class JEPA_Model(nn.Module):
         with torch.no_grad():
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
-
-        #print(f"Training step loss: {total_loss.item()}")  # Debugging
 
         return total_loss.item()
 
