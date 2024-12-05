@@ -47,24 +47,23 @@ class ResNetBlock(nn.Module):
 
 
 class ResNetEncoder(nn.Module):
-    def __init__(self, output_dim=256):
+    def __init__(self, output_dim=256, input_channels=2):
         super(ResNetEncoder, self).__init__()
-        self.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        # Initial convolution layer to reduce spatial dimensions
+        self.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
+        # Residual layers
         self.layer1 = self._make_layer(64, 64, 2)
         self.layer2 = self._make_layer(64, 128, 2, stride=2)
         self.layer3 = self._make_layer(128, 256, 2, stride=2)
 
-        # Calculate feature map size dynamically
-        dummy_input = torch.zeros(1, 2, 64, 64)  # Example input
-        with torch.no_grad():
-            x = self._forward_feature_extraction(dummy_input)
-        self.fc_input_dim = x.numel()
-
-        self.fc = nn.Linear(self.fc_input_dim, output_dim)
+        # Fully connected layer for output
+        self.fc_input_dim = None
+        self.fc = nn.Linear(256 * 8 * 8, output_dim)  # Default for input (64x64)
 
     def _make_layer(self, in_channels, out_channels, blocks, stride=1):
         downsample = None
@@ -81,20 +80,20 @@ class ResNetEncoder(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def _forward_feature_extraction(self, x):
+    def forward(self, x):
+        # Initial convolution and pooling
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
 
+        # Residual layers
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-        return x
 
-    def forward(self, x):
-        x = self._forward_feature_extraction(x)
-        x = x.view(x.size(0), -1)  # Flatten
+        # Flatten and fully connected layer
+        x = x.view(x.size(0), -1)
         x = self.fc(x)
         return x
 
