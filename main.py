@@ -13,7 +13,7 @@ def get_device():
 
 
 def load_data(device):
-    data_path = "/DL24FA/data"
+    data_path = "/scratch/dq2024/DL_Final_Proj/data/DL24FA"
 
     probe_train_ds = create_wall_dataloader(
         data_path=f"{data_path}/probe_normal/train",

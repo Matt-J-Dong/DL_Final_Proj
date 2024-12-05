@@ -47,7 +47,6 @@ def create_wall_dataloader(
     batch_size=64,
     train=True,
 ):
-    print(data_path)
     ds = WallDataset(
         data_path=data_path,
         probing=probing,
