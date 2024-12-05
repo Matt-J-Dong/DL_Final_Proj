@@ -58,8 +58,7 @@ def create_wall_dataloader(
         batch_size,
         shuffle=train,
         drop_last=True,
-        pin_memory=True,
-        num_workers=4
+        pin_memory=False,
     )
 
     return loader
