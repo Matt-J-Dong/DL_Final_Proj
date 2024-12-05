@@ -101,6 +101,7 @@ if __name__ == "__main__":
 
     # Initialize the JEPA model
     model = JEPA_Model(device=device, repr_dim=256, action_dim=2)
+    model.to(device)
 
     # Train the model
     trained_model = train_model(
