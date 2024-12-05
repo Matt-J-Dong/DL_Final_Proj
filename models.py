@@ -32,8 +32,8 @@ class Encoder(nn.Module):
         self.relu = nn.ReLU()
 
         # Initialize self.fc with correct input size
-        self.fc_input_dim = None  # Will be set after calculating the feature map size
-        self.fc = None  # Placeholder for the fully connected layer
+        self.fc_input_dim = 256 * 5 * 5  #channels = 256, width = 5, height = 5
+        self.fc = nn.Linear(self.fc_input_dim, 256).to('cuda')  # Placeholder for the fully connected layer
 
     def forward(self, x):
         # x: [B, 2, H, W]
@@ -42,15 +42,15 @@ class Encoder(nn.Module):
         x = self.relu(self.bn3(self.conv3(x)))  # [B, 128, H/8, W/8]
         x = self.relu(self.bn4(self.conv4(x)))  # [B, 256, H/16, W/16]
 
-        # Calculate the feature map size if not set
-        if self.fc_input_dim is None:
-            batch_size, channels, height, width = x.size()
-            print(f"Channels: {channels}")
-            print(f"height: {height}")
-            print(f"wifth: {width}")
-            self.fc_input_dim = channels * height * width
-            self.fc = nn.Linear(self.fc_input_dim, 256).to(x.device)
-            #print(f"Initialized self.fc with input dim: {self.fc_input_dim}")
+        # # Calculate the feature map size if not set
+        # if self.fc_input_dim is None:
+        #     batch_size, channels, height, width = x.size()
+        #     print(f"Channels: {channels}")
+        #     print(f"height: {height}")
+        #     print(f"wifth: {width}")
+        #     self.fc_input_dim = channels * height * width
+        #     self.fc = nn.Linear(self.fc_input_dim, 256).to(x.device)
+        #     #print(f"Initialized self.fc with input dim: {self.fc_input_dim}")
 
         # Flatten and pass through the fully connected layer
         x = x.view(x.size(0), -1)  # [B, C * H * W]
