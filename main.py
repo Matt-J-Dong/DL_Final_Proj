@@ -1,7 +1,7 @@
 from dataset import create_wall_dataloader
 from evaluator import ProbingEvaluator
 import torch
-from models import MockModel
+from models import JEPA_Model
 import glob
 
 
@@ -44,7 +44,7 @@ def load_data(device):
 def load_model():
     """Load or initialize the model."""
     # TODO: Replace MockModel with your trained model
-    model = MockModel()
+    model = JEPA_Model()
     return model
 
 
