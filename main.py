@@ -46,7 +46,7 @@ def load_model():
     # TODO: Replace MockModel with your trained model
     model = JEPA_Model()
     # Load the saved model weights
-    state_dict = torch.load('./checkpoints/jepa_model_epoch_1.pth', map_location=torch.device('cpu'))
+    state_dict = torch.load('./checkpoints/jepa_model_epoch_final.pth', map_location=torch.device('cpu'))
     
     # Handle potential 'module.' prefix in state_dict keys
     from collections import OrderedDict
@@ -56,7 +56,6 @@ def load_model():
         new_state_dict[name] = v
 
     model.load_state_dict(new_state_dict)
-    model.to(device)
     return model
 
 
@@ -70,7 +69,6 @@ def evaluate_model(device, model, probe_train_ds, probe_val_ds):
     )
 
     prober = evaluator.train_pred_prober()
-    prober.to(device)
 
     avg_losses = evaluator.evaluate_all(prober=prober)
 

@@ -128,11 +128,6 @@ class JEPA_Model(nn.Module):
         # Get initial state
         init_state = states[:, 0]  # [B, C, H, W]
 
-        init_state = init_state.to(self.device)
-        actions = actions.to(self.device)
-        
-
-
         # Forward pass to get predicted embeddings
         pred_encs = self.forward(init_state, actions)  # [B, T, D]
 
