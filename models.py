@@ -18,29 +18,22 @@ def build_mlp(layers_dims: List[int]):
 
 
 class Encoder(nn.Module):
-    def __init__(self, output_dim=256, input_size=64):
+    def __init__(self, output_dim=256):
         super(Encoder, self).__init__()
-        # Define the CNN encoder layers
-        self.conv1 = nn.Conv2d(2, 32, kernel_size=3, stride=2, padding=1)
+        # Define the CNN encoder
+        self.conv1 = nn.Conv2d(2, 32, kernel_size=3, stride=2, padding=1)  # Output: [B, 32, 32, 32] if input is 64x64
         self.bn1 = nn.BatchNorm2d(32)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1)  # Output: [B, 64, 16, 16]
         self.bn2 = nn.BatchNorm2d(64)
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1)  # Output: [B, 128, 8, 8]
         self.bn3 = nn.BatchNorm2d(128)
-        self.conv4 = nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)
+        self.conv4 = nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)  # Output: [B, 256, 4, 4]
         self.bn4 = nn.BatchNorm2d(256)
         self.relu = nn.ReLU()
 
-        # Calculate the feature map size after convolution layers
-        self.fc_input_dim = self._get_conv_output_dim(input_size)
-        self.fc = nn.Linear(self.fc_input_dim, output_dim)
-
-    def _get_conv_output_dim(self, input_size):
-        size = input_size
-        for _ in range(4):  # Four convolutional layers
-            size = (size - 1) // 2 + 1  # For stride=2, padding=1, kernel_size=3
-        output_dim = 256 * size * size
-        return output_dim
+        # Initialize self.fc with correct input size
+        self.fc_input_dim = None  # Will be set after calculating the feature map size
+        self.fc = None  # Placeholder for the fully connected layer
 
     def forward(self, x):
         # x: [B, 2, H, W]
@@ -49,9 +42,23 @@ class Encoder(nn.Module):
         x = self.relu(self.bn3(self.conv3(x)))  # [B, 128, H/8, W/8]
         x = self.relu(self.bn4(self.conv4(x)))  # [B, 256, H/16, W/16]
 
-        x = x.view(x.size(0), -1)  # Flatten
-        x = self.fc(x)  # Fully connected layer
-        return x  # [B, output_dim]
+        # Calculate the feature map size if not set
+        if self.fc_input_dim is None:
+            batch_size, channels, height, width = x.size()
+            print(f"Channels: {channels}")
+            print(f"height: {height}")
+            print(f"wifth: {width}")
+            self.fc_input_dim = channels * height * width
+            self.fc = nn.Linear(self.fc_input_dim, 256).to(x.device)
+            #print(f"Initialized self.fc with input dim: {self.fc_input_dim}")
+
+        # Flatten and pass through the fully connected layer
+        x = x.view(x.size(0), -1)  # [B, C * H * W]
+        #print(f"Encoder flatten output shape: {x.shape}")  # Debugging
+
+        x = self.fc(x)  # [B, output_dim]
+        #print(f"Encoder output shape: {x.shape}")  # Debugging
+        return x  # [B, D]
 
 
 class Predictor(nn.Module):
@@ -75,16 +82,18 @@ class Predictor(nn.Module):
 
 
 class JEPA_Model(nn.Module):
-    def __init__(self, device="cuda", repr_dim=256, action_dim=2, input_size=64):
+    def __init__(self, device="cuda", repr_dim=256, action_dim=2):
         super(JEPA_Model, self).__init__()
         self.device = device
         self.repr_dim = repr_dim
         self.action_dim = action_dim
-        self.encoder = Encoder(output_dim=repr_dim, input_size=input_size).to(device)
+        self.encoder = Encoder(output_dim=repr_dim).to(device)
         self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim).to(device)
-        # Target encoder
-        self.target_encoder = Encoder(output_dim=repr_dim, input_size=input_size).to(device)
+        # For simplicity, using the same architecture for target encoder
+        self.target_encoder = Encoder(output_dim=repr_dim).to(device)
+        # Initialize target encoder with same weights as encoder
         self.target_encoder.load_state_dict(self.encoder.state_dict())
+        # Freeze target encoder parameters
         for param in self.target_encoder.parameters():
             param.requires_grad = False
 
