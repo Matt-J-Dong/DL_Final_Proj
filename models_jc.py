@@ -156,12 +156,16 @@ class JEPA_Model(nn.Module):
         self.device = device
         self.repr_dim = repr_dim
         self.action_dim = action_dim
-        self.encoder = ResNetEncoder(output_dim=256).to(device)
-        self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim).to(device)
-        self.target_encoder = Encoder(output_dim=repr_dim).to(device)
-        self.target_encoder.load_state_dict(self.encoder.state_dict())
+        self.encoder = ResNetEncoder(output_dim=repr_dim, input_channels=2).to(device)
+        self.target_encoder = ResNetEncoder(output_dim=repr_dim, input_channels=2).to(device)
+
+        # Copy weights
+        self.target_encoder.load_state_dict(self.encoder.state_dict(), strict=False)
+
+        # Freeze target encoder parameters
         for param in self.target_encoder.parameters():
             param.requires_grad = False
+
 
     def forward(self, states, actions):
         B, T, C, H, W = states.shape
