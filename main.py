@@ -45,6 +45,17 @@ def load_model():
     """Load or initialize the model."""
     # TODO: Replace MockModel with your trained model
     model = JEPA_Model()
+    # Load the saved model weights
+    state_dict = torch.load('/checkpoints/jepa_model_epoch_final.pth', map_location=torch.device('cpu'))
+    
+    # Handle potential 'module.' prefix in state_dict keys
+    from collections import OrderedDict
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = k[7:] if k.startswith('module.') else k  # remove 'module.' prefix if present
+        new_state_dict[name] = v
+
+    model.load_state_dict(new_state_dict)
     return model
 
 
