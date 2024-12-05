@@ -150,6 +150,7 @@ def main_worker(local_rank):
 
     # Initialize the JEPA model
     model = JEPA_Model(device=device, repr_dim=256, action_dim=2,r=r, alpha=alpha)
+    print(device)
     model.to(device)
 
     # Wrap the model with DistributedDataParallel
