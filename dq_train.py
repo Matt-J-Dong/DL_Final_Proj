@@ -5,6 +5,8 @@ from tqdm.auto import tqdm
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import os  # Import os to access environment variables
+from torch.utils.data import Subset
+
 
 from dataset import create_wall_dataloader
 from models import JEPA_Model
@@ -21,7 +23,36 @@ def get_device(local_rank):
     return device
 
 
-def load_data(device, batch_size=64, is_distributed=False):
+# def load_data(device, batch_size=64, is_distributed=False):
+#     data_path = "./data/DL24FA"
+
+#     train_loader = create_wall_dataloader(
+#         data_path=f"{data_path}/train",
+#         probing=False,
+#         device=device,
+#         train=True,
+#         batch_size=batch_size,  # Ensure batch_size is set here
+#     )
+
+#     # Access the dataset from the DataLoader
+#     train_dataset = train_loader.dataset
+
+#     if is_distributed:
+#         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+#         # Re-create DataLoader with the distributed sampler
+#         train_loader = torch.utils.data.DataLoader(
+#             train_dataset,
+#             batch_size=batch_size,
+#             sampler=train_sampler,
+#         )
+#     else:
+#         train_sampler = None
+#         # If not distributed, use the original DataLoader
+#         train_loader = train_loader
+
+#     return train_loader, train_sampler
+
+def load_data(device, batch_size=64, is_distributed=False, subset_size=1000):
     data_path = "./data/DL24FA"
 
     train_loader = create_wall_dataloader(
@@ -35,6 +66,10 @@ def load_data(device, batch_size=64, is_distributed=False):
     # Access the dataset from the DataLoader
     train_dataset = train_loader.dataset
 
+    # Create a subset of the dataset
+    indices = list(range(subset_size))
+    train_dataset = Subset(train_dataset, indices)
+
     if is_distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
         # Re-create DataLoader with the distributed sampler
@@ -46,7 +81,11 @@ def load_data(device, batch_size=64, is_distributed=False):
     else:
         train_sampler = None
         # If not distributed, use the original DataLoader
-        train_loader = train_loader
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+        )
 
     return train_loader, train_sampler
 
@@ -63,7 +102,7 @@ def train_model(
     device,
     model,
     train_loader,
-    num_epochs=10,
+    num_epochs=1,
     learning_rate=1e-3,
     momentum=0.99,
     save_every=1,
