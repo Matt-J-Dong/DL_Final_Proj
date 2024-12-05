@@ -36,9 +36,9 @@ def load_data(device, batch_size=64, is_distributed=False, subset_size=1000):
     # Access the dataset from the DataLoader
     train_dataset = train_loader.dataset
 
-    # Create a subset of the dataset
-    indices = list(range(subset_size))
-    train_dataset = Subset(train_dataset, indices)
+    # TODO: Create a subset of the dataset for testing
+    # indices = list(range(subset_size))
+    # train_dataset = Subset(train_dataset, indices)
 
     if is_distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)

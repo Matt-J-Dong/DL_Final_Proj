@@ -17,32 +17,6 @@ def build_mlp(layers_dims: List[int]):
     layers.append(nn.Linear(layers_dims[-2], layers_dims[-1]))
     return nn.Sequential(*layers)
 
-
-# class Encoder(nn.Module):
-#     def __init__(self, output_dim=256):
-#         super(Encoder, self).__init__()
-#         # Define the CNN encoder
-#         self.conv1 = nn.Conv2d(2, 32, kernel_size=3, stride=2, padding=1)  # Output: [B, 32, 32, 32] if input is 64x64
-#         self.bn1 = nn.BatchNorm2d(32)
-#         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1)  # Output: [B, 64, 16, 16]
-#         self.bn2 = nn.BatchNorm2d(64)
-#         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1)  # Output: [B, 128, 8, 8]
-#         self.bn3 = nn.BatchNorm2d(128)
-#         self.conv4 = nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)  # Output: [B, 256, 4, 4]
-#         self.bn4 = nn.BatchNorm2d(256)
-#         self.relu = nn.ReLU()
-#         self.fc_input_dim = 256 * 5 * 5  #channels = 256, width = 5, height = 5
-#         self.fc = nn.Linear(self.fc_input_dim, 256).to('cuda')  
-
-#     def forward(self, x):
-#         # x: [B, 2, H, W]
-#         x = self.relu(self.bn1(self.conv1(x)))  # [B, 32, H/2, W/2]
-#         x = self.relu(self.bn2(self.conv2(x)))  # [B, 64, H/4, W/4]
-#         x = self.relu(self.bn3(self.conv3(x)))  # [B, 128, H/8, W/8]
-#         x = self.relu(self.bn4(self.conv4(x)))  # [B, 256, H/16, W/16]
-#         x = x.view(x.size(0), -1)  # [B, C * H * W]
-#         x = self.fc(x)  # [B, output_dim]
-#         return x  # [B, D]
 class Encoder(nn.Module):
     def __init__(self, output_dim=256, r=4, alpha=1.0):
         super(Encoder, self).__init__()
@@ -72,24 +46,6 @@ class Encoder(nn.Module):
         return x
 
 
-# class Predictor(nn.Module):
-#     def __init__(self, input_dim, output_dim):
-#         super(Predictor, self).__init__()
-#         # input_dim = state_dim + action_dim
-#         self.fc1 = nn.Linear(input_dim, output_dim)
-#         self.bn1 = nn.BatchNorm1d(output_dim)
-#         self.relu = nn.ReLU()
-#         self.fc2 = nn.Linear(output_dim, output_dim)
-
-#     def forward(self, s_prev, u_prev):
-#         # s_prev: [B, D], u_prev: [B, action_dim]
-#         x = torch.cat([s_prev, u_prev], dim=-1)  # [B, D + action_dim]
-#         x = self.fc1(x)  # [B, output_dim]
-#         x = self.bn1(x)
-#         x = self.relu(x)
-#         x = self.fc2(x)  # [B, output_dim]
-#         #print(f"Predictor output shape: {x.shape}")  # Debugging
-#         return x  # [B, D]
 class Predictor(nn.Module):
     def __init__(self, input_dim, output_dim, r=4, alpha=1.0):
         super(Predictor, self).__init__()
