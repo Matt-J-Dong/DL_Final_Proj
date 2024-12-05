@@ -41,14 +41,14 @@ class Encoder(nn.Module):
         x = self.relu(self.bn2(self.conv2(x)))  # [B, 64, H/4, W/4]
         x = self.relu(self.bn3(self.conv3(x)))  # [B, 128, H/8, W/8]
         x = self.relu(self.bn4(self.conv4(x)))  # [B, 256, H/16, W/16]
-        
+
         # Calculate the feature map size if not set
         if self.fc_input_dim is None:
             batch_size, channels, height, width = x.size()
             self.fc_input_dim = channels * height * width
             self.fc = nn.Linear(self.fc_input_dim, 256).to(x.device)
             #print(f"Initialized self.fc with input dim: {self.fc_input_dim}")
-        
+
         # Flatten and pass through the fully connected layer
         x = x.view(x.size(0), -1)  # [B, C * H * W]
         #print(f"Encoder flatten output shape: {x.shape}")  # Debugging
@@ -94,32 +94,28 @@ class JEPA_Model(nn.Module):
         for param in self.target_encoder.parameters():
             param.requires_grad = False
 
-    def forward(self, states, actions):
+    def forward(self, init_state, actions):
         """
         Args:
-            During training:
-                states: [B, T, Ch, H, W]
-            During inference:
-                states: [B, 1, Ch, H, W]
-            actions: [B, T-1, 2]
+            init_state: [B, C, H, W]
+            actions: [B, T-1, action_dim]
 
         Output:
             predictions: [B, T, D]
         """
-        B, T, C, H, W = states.shape
-        device = states.device
+        B, T_minus_one, _ = actions.shape
+        T = T_minus_one + 1  # Total number of timesteps including the initial state
+        device = init_state.device
+
         # Initialize list to store predicted representations
         pred_encs = []
 
         # Get initial representation s_0
-        o_0 = states[:, 0]  # [B, Ch, H, W]
-        s_0 = self.encoder(o_0)  # [B, D]
-        pred_encs.append(s_0)
+        s_prev = self.encoder(init_state)  # [B, D]
+        pred_encs.append(s_prev)
 
-        s_prev = s_0
-
-        for t in range(1, T):
-            u_prev = actions[:, t - 1]  # [B, action_dim]
+        for t in range(T_minus_one):
+            u_prev = actions[:, t]  # [B, action_dim]
             s_pred = self.predictor(s_prev, u_prev)  # [B, D]
             pred_encs.append(s_pred)
             s_prev = s_pred
@@ -134,36 +130,33 @@ class JEPA_Model(nn.Module):
         Perform a single training step.
         Args:
             states: [B, T, Ch, H, W]
-            actions: [B, T-1, 2]
+            actions: [B, T-1, action_dim]
             criterion: loss function
             optimizer: optimizer
         """
         B, T, C, H, W = states.shape
         device = states.device
 
-        # Get initial representation s_0
-        o_0 = states[:, 0]  # [B, Ch, H, W]
-        s_0 = self.encoder(o_0)  # [B, D]
-        s_prev = s_0
+        # Get initial state
+        init_state = states[:, 0]  # [B, C, H, W]
 
-        total_loss = 0
+        # Forward pass to get predicted embeddings
+        pred_encs = self.forward(init_state, actions)  # [B, T, D]
 
-        for t in range(1, T):
-            o_n = states[:, t]  # [B, Ch, H, W]
-            s_target = self.target_encoder(o_n)  # [B, D]
+        # Get target embeddings from target encoder
+        target_encs = []
+        for t in range(T):
+            o_t = states[:, t]  # [B, C, H, W]
+            s_target = self.target_encoder(o_t)  # [B, D]
+            target_encs.append(s_target)
+        target_encs = torch.stack(target_encs, dim=1)  # [B, T, D]
 
-            u_prev = actions[:, t - 1]  # [B, action_dim]
-            s_pred = self.predictor(s_prev, u_prev)  # [B, D]
-
-            # Compute loss between s_pred and s_target
-            loss = criterion(s_pred, s_target)
-            total_loss += loss
-
-            s_prev = s_pred
+        # Compute loss between pred_encs and target_encs
+        loss = criterion(pred_encs, target_encs)
 
         # Backpropagation
         optimizer.zero_grad()
-        total_loss.backward()
+        loss.backward()
         optimizer.step()
 
         # Update target encoder
@@ -171,9 +164,7 @@ class JEPA_Model(nn.Module):
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
 
-        #print(f"Training step loss: {total_loss.item()}")  # Debugging
-
-        return total_loss.item()
+        return loss.item()
 
 
 class Prober(torch.nn.Module):
@@ -200,5 +191,3 @@ class Prober(torch.nn.Module):
     def forward(self, e):
         output = self.prober(e)
         return output
-
-

@@ -115,16 +115,20 @@ class ProbingEvaluator:
             for batch in tqdm(dataset, desc="Probe prediction step"):
                 ################################################################################
                 # TODO: Forward pass through your model
-                # init_states = batch.states[:, 0:1]  # BS, 1, C, H, W
-                # pred_encs = model(states=init_states, actions=batch.actions)
-                # pred_encs = pred_encs.transpose(0, 1)  # # BS, T, D --> T, BS, D
+                # # EDITED
+                # init_states = batch.states[:, :-1]  # [BS, T-1, C, H, W]
+                # actions = batch.actions  # [BS, T-1, action_dim]
+
+                # pred_encs = model(states=init_states, actions=actions)
+                # pred_encs = pred_encs.transpose(0, 1)  # [T-1, BS, D]
 
                 # EDITED
-                init_states = batch.states[:, :-1]  # [BS, T-1, C, H, W]
-                actions = batch.actions  # [BS, T-1, action_dim]
+                init_state = batch.states[:, 0]  # [B, C, H, W]
+                actions = batch.actions  # [B, T-1, action_dim]
 
-                pred_encs = model(states=init_states, actions=actions)
-                pred_encs = pred_encs.transpose(0, 1)  # [T-1, BS, D]
+                # Forward pass through the model
+                pred_encs = model(init_state, actions)  # [B, T, D]
+                pred_encs = pred_encs.transpose(0, 1)
 
                 # Make sure pred_encs has shape (T, BS, D) at this point
                 ################################################################################
@@ -138,8 +142,8 @@ class ProbingEvaluator:
 
                 target = getattr(batch, "locations").cuda()
                 target = self.normalizer.normalize_location(target)
-                #EDITED
-                target = target[:, :-1]
+                # #EDITED
+                # target = target[:, :-1]
                 
 
                 if (
@@ -229,19 +233,20 @@ class ProbingEvaluator:
             # pred_encs = pred_encs.transpose(0, 1)
 
             #EDITED
-            init_states = batch.states[:, :-1]  # [BS, T-1, C, H, W]
-            actions = batch.actions  # [BS, T-1, action_dim]
+            init_state = batch.states[:, 0]  # [B, C, H, W]
+            actions = batch.actions  # [B, T-1, action_dim]
 
-            pred_encs = model(states=init_states, actions=actions)
-            pred_encs = pred_encs.transpose(0, 1)  # [T-1, BS, D]
+            # Forward pass through the model
+            pred_encs = model(init_state, actions)  # [B, T, D]
+            pred_encs = pred_encs.transpose(0, 1)  # [B, T, D] --> [T, B, D]
 
             # Make sure pred_encs has shape (T, BS, D) at this point
             ################################################################################
 
             target = getattr(batch, "locations").cuda()
             target = self.normalizer.normalize_location(target)
-            #EDITED
-            target = target[:, :-1]
+            # #EDITED
+            # target = target[:, :-1]
 
             pred_locs = torch.stack([prober(x) for x in pred_encs], dim=1)
             losses = location_losses(pred_locs, target)
