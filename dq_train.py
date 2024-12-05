@@ -1,3 +1,5 @@
+# train.py
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -37,8 +39,8 @@ def load_data(device, batch_size=64, is_distributed=False, subset_size=1000):
     train_dataset = train_loader.dataset
 
     # TODO: Create a subset of the dataset for testing
-    indices = list(range(subset_size))
-    train_dataset = Subset(train_dataset, indices)
+    # indices = list(range(subset_size))
+    # train_dataset = Subset(train_dataset, indices)
 
     if is_distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
@@ -93,6 +95,7 @@ def train_model(
         for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}", disable=(rank != 0))):
             states = batch.states.to(device)  # [B, T, 2, 64, 64]
             actions = batch.actions.to(device)  # [B, T-1, 2]
+            locations = batch.locations.to(device)
 
             #print(f"Initial state shape: {states[:, 0].shape}") --> debug
 
