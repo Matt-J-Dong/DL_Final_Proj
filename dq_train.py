@@ -95,7 +95,6 @@ def train_model(
         for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}", disable=(rank != 0))):
             states = batch.states.to(device)  # [B, T, 2, 64, 64]
             actions = batch.actions.to(device)  # [B, T-1, 2]
-            locations = batch.locations.to(device)
 
             #print(f"Initial state shape: {states[:, 0].shape}") --> debug
 

@@ -29,17 +29,13 @@ class WallDataset:
         return len(self.states)
 
     def __getitem__(self, i):
-        # states = torch.from_numpy(self.states[i]).float().to(self.device)
-        # actions = torch.from_numpy(self.actions[i]).float().to(self.device)
-        states = torch.from_numpy(self.states[i]).float()
-        actions = torch.from_numpy(self.actions[i]).float()
+        states = torch.from_numpy(self.states[i]).float().to(self.device)
+        actions = torch.from_numpy(self.actions[i]).float().to(self.device)
 
         if self.locations is not None:
-            #locations = torch.from_numpy(self.locations[i]).float().to(self.device)
-            locations = torch.from_numpy(self.locations[i]).float()
+            locations = torch.from_numpy(self.locations[i]).float().to(self.device)
         else:
-            #locations = torch.empty(0).to(self.device)
-            locations = torch.empty(0)
+            locations = torch.empty(0).to(self.device)
 
         return WallSample(states=states, locations=locations, actions=actions)
 
@@ -62,8 +58,7 @@ def create_wall_dataloader(
         batch_size,
         shuffle=train,
         drop_last=True,
-        pin_memory=True,
-        num_workers=4
+        pin_memory=False,
     )
 
     return loader
