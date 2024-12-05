@@ -91,7 +91,7 @@ def train_model(
 
 if __name__ == "__main__":
     device = get_device()
-    batch_size = 64
+    batch_size = 512
     num_epochs = 10
     learning_rate = 1e-3
     momentum = 0.99
