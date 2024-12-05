@@ -38,7 +38,7 @@ default_config = ProbingConfig()
 
 
 def location_losses(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-    # added print statement for debugging purposes
+    # EDITED: added print statement for debugging purposes
     if pred.shape != target.shape:
         print(f"Shape mismatch: pred.shape={pred.shape}, target.shape={target.shape}")
     assert pred.shape == target.shape
@@ -115,9 +115,16 @@ class ProbingEvaluator:
             for batch in tqdm(dataset, desc="Probe prediction step"):
                 ################################################################################
                 # TODO: Forward pass through your model
-                init_states = batch.states[:, 0:1]  # BS, 1, C, H, W
-                pred_encs = model(states=init_states, actions=batch.actions)
-                pred_encs = pred_encs.transpose(0, 1)  # # BS, T, D --> T, BS, D
+                # init_states = batch.states[:, 0:1]  # BS, 1, C, H, W
+                # pred_encs = model(states=init_states, actions=batch.actions)
+                # pred_encs = pred_encs.transpose(0, 1)  # # BS, T, D --> T, BS, D
+
+                # EDITED
+                init_states = batch.states[:, :-1]  # [BS, T-1, C, H, W]
+                actions = batch.actions  # [BS, T-1, action_dim]
+
+                pred_encs = model(states=init_states, actions=actions)
+                pred_encs = pred_encs.transpose(0, 1)  # [T-1, BS, D]
 
                 # Make sure pred_encs has shape (T, BS, D) at this point
                 ################################################################################
@@ -213,10 +220,17 @@ class ProbingEvaluator:
         for idx, batch in enumerate(tqdm(val_ds, desc="Eval probe pred")):
             ################################################################################
             # TODO: Forward pass through your model
-            init_states = batch.states[:, 0:1]  # BS, 1 C, H, W
-            pred_encs = model(states=init_states, actions=batch.actions)
-            # # BS, T, D --> T, BS, D
-            pred_encs = pred_encs.transpose(0, 1)
+            # init_states = batch.states[:, 0:1]  # BS, 1 C, H, W
+            # pred_encs = model(states=init_states, actions=batch.actions)
+            # # # BS, T, D --> T, BS, D
+            # pred_encs = pred_encs.transpose(0, 1)
+
+            #EDITED
+            init_states = batch.states[:, :-1]  # [BS, T-1, C, H, W]
+            actions = batch.actions  # [BS, T-1, action_dim]
+
+            pred_encs = model(states=init_states, actions=actions)
+            pred_encs = pred_encs.transpose(0, 1)  # [T-1, BS, D]
 
             # Make sure pred_encs has shape (T, BS, D) at this point
             ################################################################################
