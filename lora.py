@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 import math
-from torch.nn import functional as F
+import torch.nn.functional as F
 
 class LoRALinear(nn.Module):
     def __init__(self, in_features, out_features, r=4, alpha=1.0):
@@ -19,16 +19,17 @@ class LoRALinear(nn.Module):
         self.weight.requires_grad = False  # Freeze base weight
 
         # LoRA weights (trainable)
-        self.A = nn.Parameter(torch.zeros(r, in_features))
-        self.B = nn.Parameter(torch.zeros(out_features, r))
-        nn.init.kaiming_uniform_(self.A, a=math.sqrt(5))
-        nn.init.zeros_(self.B)
+        self.W_down = nn.Parameter(torch.zeros(in_features, r))
+        self.W_up = nn.Parameter(torch.zeros(r, out_features))
+        nn.init.kaiming_uniform_(self.W_down, a=math.sqrt(5))
+        nn.init.zeros_(self.W_up)
 
         # Bias term (optional)
         self.bias = nn.Parameter(torch.zeros(out_features))
 
     def forward(self, x):
         # Compute the LoRA update
-        delta_weight = torch.matmul(self.B, self.A) * self.scaling
+        delta_weight = (self.W_down @ self.W_up) * self.scaling  # [in_features, out_features]
+        delta_weight = delta_weight.T  # Transpose to [out_features, in_features]
         # Apply the combined weight
         return F.linear(x, self.weight + delta_weight, self.bias)

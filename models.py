@@ -58,7 +58,7 @@ class Encoder(nn.Module):
         self.relu = nn.ReLU()
 
         # Fully connected layer with LoRA
-        self.fc_input_dim = 256 * 4 * 4  # Adjust based on input size
+        self.fc_input_dim = 256 * 5 * 5  # Adjust based on input size
         self.fc = LoRALinear(self.fc_input_dim, output_dim, r=r, alpha=alpha)
 
     def forward(self, x):
