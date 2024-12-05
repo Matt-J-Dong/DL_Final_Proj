@@ -149,7 +149,8 @@ def main_worker(local_rank):
     train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=True)
 
     # Initialize the JEPA model
-    model = JEPA_Model(device=device, repr_dim=256, action_dim=2,r=r, alpha=alpha)
+    #model = JEPA_Model(device=device, repr_dim=256, action_dim=2,r=r, alpha=alpha)
+    model = JEPA_Model(device=device, repr_dim=256, action_dim=2)
     print(device)
     model.to(device)
 
