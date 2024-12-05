@@ -138,7 +138,7 @@ def main_worker(local_rank):
 
     device = get_device(local_rank)
 
-    batch_size = 128
+    batch_size = 256
     num_epochs = 10
     learning_rate = 1e-3
     momentum = 0.99
