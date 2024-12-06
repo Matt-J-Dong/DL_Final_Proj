@@ -19,7 +19,7 @@ def get_device():
 
 
 def load_data(device, batch_size=64):
-    data_path = "./data/DL24FA"
+    data_path = " /scratch/DL24FA/"
 
     train_ds = create_wall_dataloader(
         data_path=f"{data_path}/train",
