@@ -66,15 +66,12 @@ class Predictor(nn.Module):
 
 
 class JEPA_Model(nn.Module):
-    def __init__(self, device="cuda", repr_dim=256, action_dim=2):
+    def __init__(self, repr_dim=256, action_dim=2):
         super(JEPA_Model, self).__init__()
-        self.device = device
-        self.repr_dim = repr_dim
-        self.action_dim = action_dim
-        self.encoder = Encoder(output_dim=repr_dim).to(device)
-        self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim).to(device)
+        self.encoder = Encoder(output_dim=repr_dim)
+        self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim)
         # For simplicity, using the same architecture for target encoder
-        self.target_encoder = Encoder(output_dim=repr_dim).to(device)
+        self.target_encoder = Encoder(output_dim=repr_dim)
         # Initialize target encoder with same weights as encoder
         self.target_encoder.load_state_dict(self.encoder.state_dict())
         # Freeze target encoder parameters
@@ -91,8 +88,7 @@ class JEPA_Model(nn.Module):
             predictions: [B, T, D]
         """
         B, T_minus_one, _ = actions.shape
-        device = init_state.device
-
+        
         # Initialize list to store predicted representations
         pred_encs = []
 
