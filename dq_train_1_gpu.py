@@ -45,11 +45,11 @@ def load_data(device, batch_size=1024, is_distributed=False, subset_size=1000):
     # train_dataset = Subset(train_dataset, indices)
 
     # Without distributed, just use a standard DataLoader
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-    )
+    # train_loader = torch.utils.data.DataLoader(
+    #     train_dataset,
+    #     batch_size=batch_size,
+    #     shuffle=True,
+    # )
 
     return train_loader, None
 
