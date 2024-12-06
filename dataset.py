@@ -29,15 +29,15 @@ class WallDataset:
         return len(self.states)
 
     def __getitem__(self, i):
-        # states = torch.from_numpy(self.states[i]).float().to(self.device)
-        # actions = torch.from_numpy(self.actions[i]).float().to(self.device)
+        states = torch.from_numpy(self.states[i]).float().to(self.device)
+        actions = torch.from_numpy(self.actions[i]).float().to(self.device)
         # to supress warning
-        states = torch.tensor(self.states[i], dtype=torch.float, device=self.device)
-        actions = torch.tensor(self.actions[i], dtype=torch.float, device=self.device)
+        #states = torch.tensor(self.states[i], dtype=torch.float, device=self.device)
+        #actions = torch.tensor(self.actions[i], dtype=torch.float, device=self.device)
 
         if self.locations is not None:
-            # locations = torch.from_numpy(self.locations[i]).float().to(self.device)
-            locations = torch.tensor(self.locations[i], dtype=torch.float, device=self.device)
+            locations = torch.from_numpy(self.locations[i]).float().to(self.device)
+            #locations = torch.tensor(self.locations[i], dtype=torch.float, device=self.device)
         else:
             locations = torch.empty(0).to(self.device)
 
