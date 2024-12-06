@@ -15,6 +15,8 @@ from torch.utils.data import Subset
 from dataset import create_wall_dataloader
 from models import JEPA_Model
 from evaluator import ProbingEvaluator
+import torch.multiprocessing as mp
+
 
 
 def get_device():
@@ -117,6 +119,7 @@ def main():
     num_epochs = 10
     learning_rate = 1e-3
     momentum = 0.99
+    mp.set_start_method('spawn', force=True)
 
     # Load data (not distributed)
     train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
