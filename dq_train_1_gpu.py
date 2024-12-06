@@ -40,7 +40,7 @@ def load_data(device, batch_size=64, is_distributed=False, subset_size=1000):
     )
 
     # Create a subset of the dataset for testing (if desired)
-    train_dataset = train_loader.dataset
+    # train_dataset = train_loader.dataset
 
     # if we want to test with smaller subset of data
     # indices = list(range(subset_size))
@@ -83,8 +83,8 @@ def train_model(
         epoch_loss = 0.0
 
         for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
-            states = batch.states.to(device)  # [B, T, 2, 64, 64]
-            actions = batch.actions.to(device)  # [B, T-1, 2]
+            states = batch.states # [B, T, 2, 64, 64]
+            actions = batch.actions # [B, T-1, 2]
 
             # Perform a training step
             loss = model.train_step(
@@ -115,13 +115,13 @@ def train_model(
 def main():
     device = get_device()
 
-    batch_size = 64
+    batch_size = 512
     num_epochs = 10
     learning_rate = 1e-3
     momentum = 0.99
 
     # for multiprocessing
-    mp.set_start_method('spawn', force=True)
+    #mp.set_start_method('spawn', force=True)
 
     # Load data (not distributed)
     train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
