@@ -13,7 +13,7 @@ import os
 from torch.utils.data import Subset
 
 from dataset import create_wall_dataloader
-from models import JEPA_Model
+from models_dq import JEPA_Model
 from evaluator import ProbingEvaluator
 import torch.multiprocessing as mp
 
@@ -38,20 +38,6 @@ def load_data(device, batch_size=64, is_distributed=False, subset_size=1000):
         train=True,
         batch_size=batch_size,
     )
-
-    # Create a subset of the dataset for testing (if desired)
-    # train_dataset = train_loader.dataset
-
-    # if we want to test with smaller subset of data
-    # indices = list(range(subset_size))
-    # train_dataset = Subset(train_dataset, indices)
-
-    # Without distributed, just use a standard DataLoader
-    # train_loader = torch.utils.data.DataLoader(
-    #     train_dataset,
-    #     batch_size=batch_size,
-    #     shuffle=True,
-    # )
 
     return train_loader, None
 
@@ -86,16 +72,35 @@ def train_model(
             states = batch.states.to(device)  # [B, T, 2, 64, 64]
             actions = batch.actions.to(device)  # [B, T-1, 2]
 
-            # Perform a training step
-            loss = model.train_step(
-                states=states,
-                actions=actions,
-                criterion=criterion,
-                optimizer=optimizer,
-                momentum=momentum,
-            )
+            B, T, C, H, W = states.shape
 
-            epoch_loss += loss
+            # 1. Forward pass: predict embeddings
+            init_state = states[:, 0]  # [B, C, H, W]
+            pred_encs = model.forward(init_state, actions)  # [B, T, D]
+
+            # 2. Compute target embeddings with the target encoder
+            target_encs = []
+            for t in range(T):
+                o_t = states[:, t]  # [B, C, H, W]
+                s_target = model.target_encoder(o_t)  # [B, D]
+                target_encs.append(s_target)
+            target_encs = torch.stack(target_encs, dim=1)  # [B, T, D]
+
+            # 3. Compute loss
+            loss = criterion(pred_encs, target_encs)
+
+            # 4. Backpropagation and optimization step
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            # 5. Update target encoder parameters using momentum update
+            with torch.no_grad():
+                for param_q, param_k in zip(model.encoder.parameters(), model.target_encoder.parameters()):
+                    param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
+
+            loss_val = loss.item()
+            epoch_loss += loss_val
 
             if batch_idx % 100 == 0:
                 print(
