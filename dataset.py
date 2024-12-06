@@ -63,7 +63,7 @@ def create_wall_dataloader(
         shuffle=train,
         drop_last=True,
         pin_memory=True,
-        num_workers=2
+        num_workers=0
     )
 
     return loader
