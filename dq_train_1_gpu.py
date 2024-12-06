@@ -18,17 +18,7 @@ from evaluator import ProbingEvaluator
 import torch.multiprocessing as mp
 
 
-
-def get_device():
-    """Set the device for single-GPU training."""
-    if torch.cuda.is_available():
-        device = torch.device('cuda')
-    else:
-        device = torch.device('cpu')
-    print(f"Using device: {device}")
-    return device
-
-def load_data(device, batch_size=64, is_distributed=False, subset_size=1000):
+def load_data(device, batch_size=64):
     data_path = "./data/DL24FA"
 
     train_loader = create_wall_dataloader(
@@ -118,7 +108,8 @@ def train_model(
     return model
 
 def main():
-    device = get_device()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)
 
     batch_size = 512
     num_epochs = 10
@@ -129,7 +120,7 @@ def main():
     #mp.set_start_method('spawn')
 
     # Load data (not distributed)
-    train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
+    train_loader, train_sampler = load_data(device, batch_size=batch_size)
 
     # Initialize the JEPA model
     model = JEPA_Model(device=device, repr_dim=256, action_dim=2)
