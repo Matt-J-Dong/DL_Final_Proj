@@ -121,7 +121,7 @@ def main():
     momentum = 0.99
 
     # for multiprocessing
-    #mp.set_start_method('spawn', force=True)
+    mp.set_start_method('spawn', force=True)
 
     # Load data (not distributed)
     train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
