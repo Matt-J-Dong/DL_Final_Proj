@@ -57,7 +57,7 @@ def main():
     train_loader, train_sampler = load_data(device, batch_size=batch_size)
 
     # Initialize the JEPA model
-    model = JEPA_Model(repr_dim=512, action_dim=2)
+    model = JEPA_Model(repr_dim=256, action_dim=2)
     model.to(device)
 
     criterion = nn.MSELoss()
