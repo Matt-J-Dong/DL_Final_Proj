@@ -32,7 +32,7 @@ class Encoder(nn.Module):
         self.relu = nn.ReLU()
 
         # Initialize self.fc with correct input size
-        self.fc_input_dim = output_dim * 5 * 5  #channels = 256, width = 5, height = 5
+        self.fc_input_dim = output_dim * 4 * 4  #channels = 256, width = 5, height = 5
         self.fc = nn.Linear(self.fc_input_dim, output_dim)
 
     def forward(self, x):
@@ -88,7 +88,7 @@ class JEPA_Model(nn.Module):
             predictions: [B, T, D]
         """
         B, T_minus_one, _ = actions.shape
-        
+
         # Initialize list to store predicted representations
         pred_encs = []
 
