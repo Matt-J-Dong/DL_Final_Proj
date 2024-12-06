@@ -1,5 +1,7 @@
 '''
 singularity exec --nv --overlay /scratch/$USER/my_env/overlay-15GB-500K.ext3:ro /scratch/work/public/singularity/cuda12.3.2-cudnn9.0.0-ubuntu-22.04.4.sif /bin/bash
+singularity exec --nv --memory 16G --cpu 4 --overlay /scratch/$USER/my_env/overlay-15GB-500K.ext3:ro /scratch/work/public/singularity/cuda12.3.2-cudnn9.0.0-ubuntu-22.04.4.sif /bin/bash
+
 source /ext3/env.sh
 cd /scratch/dq2024/DL_Final_Proj/
 
@@ -55,7 +57,7 @@ def main():
     train_loader, train_sampler = load_data(device, batch_size=batch_size)
 
     # Initialize the JEPA model
-    model = JEPA_Model(repr_dim=256, action_dim=2)
+    model = JEPA_Model(repr_dim=512, action_dim=2)
     model.to(device)
 
     criterion = nn.MSELoss()
@@ -120,5 +122,5 @@ def main():
     save_model(model, "final")
 
 if __name__ == "__main__":
-    mp.set_start_method('spawn')
+    #mp.set_start_method('spawn')
     main()
