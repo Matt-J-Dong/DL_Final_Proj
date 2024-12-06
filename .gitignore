@@ -4,4 +4,4 @@ __pycache__/
 .read_states.py.swp
 checkpoints/
 data/states.npy
-data/
+data/DL24FA
