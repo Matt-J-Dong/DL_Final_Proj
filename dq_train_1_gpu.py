@@ -18,7 +18,6 @@ from evaluator import ProbingEvaluator
 import torch.multiprocessing as mp
 
 
-
 def get_device():
     """Set the device for single-GPU training."""
     if torch.cuda.is_available():
