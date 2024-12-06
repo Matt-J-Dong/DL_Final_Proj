@@ -113,7 +113,7 @@ def main():
 
     batch_size = 512
     num_epochs = 10
-    learning_rate = 1e-3
+    learning_rate = 1e-2
     momentum = 0.99
 
     # for multiprocessing
