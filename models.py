@@ -32,8 +32,8 @@ class Encoder(nn.Module):
         self.relu = nn.ReLU()
 
         # Initialize self.fc with correct input size
-        self.fc_input_dim = 256 * 5 * 5  #channels = 256, width = 5, height = 5
-        self.fc = nn.Linear(self.fc_input_dim, 256).to('cuda')  # Placeholder for the fully connected layer
+        self.fc_input_dim = output_dim * 5 * 5  #channels = 256, width = 5, height = 5
+        self.fc = nn.Linear(self.fc_input_dim, output_dim)
 
     def forward(self, x):
         # x: [B, 2, H, W]

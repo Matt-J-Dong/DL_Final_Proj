@@ -1,3 +1,10 @@
+'''
+singularity exec --nv --overlay /scratch/$USER/my_env/overlay-15GB-500K.ext3:ro /scratch/work/public/singularity/cuda12.3.2-cudnn9.0.0-ubuntu-22.04.4.sif /bin/bash
+source /ext3/env.sh
+cd /scratch/dq2024/DL_Final_Proj/
+
+'''
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -106,7 +113,7 @@ def train_model(
 def main():
     device = get_device()
 
-    batch_size = 1024
+    batch_size = 512
     num_epochs = 10
     learning_rate = 1e-3
     momentum = 0.99
