@@ -115,13 +115,13 @@ def train_model(
 def main():
     device = get_device()
 
-    batch_size = 1
+    batch_size = 512
     num_epochs = 10
     learning_rate = 1e-3
     momentum = 0.99
 
     # for multiprocessing
-    mp.set_start_method('spawn', force=True)
+    mp.set_start_method('spawn')
 
     # Load data (not distributed)
     train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
