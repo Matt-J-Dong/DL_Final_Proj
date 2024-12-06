@@ -18,6 +18,7 @@ from evaluator import ProbingEvaluator
 import torch.multiprocessing as mp
 
 
+
 def get_device():
     """Set the device for single-GPU training."""
     if torch.cuda.is_available():
@@ -82,8 +83,8 @@ def train_model(
         epoch_loss = 0.0
 
         for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
-            states = batch.states # [B, T, 2, 64, 64]
-            actions = batch.actions # [B, T-1, 2]
+            states = batch.states.to(device)  # [B, T, 2, 64, 64]
+            actions = batch.actions.to(device)  # [B, T-1, 2]
 
             # Perform a training step
             loss = model.train_step(
