@@ -28,7 +28,7 @@ def get_device():
     print(f"Using device: {device}")
     return device
 
-def load_data(device, batch_size=1024, is_distributed=False, subset_size=1000):
+def load_data(device, batch_size=64, is_distributed=False, subset_size=1000):
     data_path = "./data/DL24FA"
 
     train_loader = create_wall_dataloader(
@@ -115,10 +115,12 @@ def train_model(
 def main():
     device = get_device()
 
-    batch_size = 1024
+    batch_size = 64
     num_epochs = 10
     learning_rate = 1e-3
     momentum = 0.99
+
+    # for multiprocessing
     mp.set_start_method('spawn', force=True)
 
     # Load data (not distributed)
