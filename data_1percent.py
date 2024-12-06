@@ -34,6 +34,7 @@ def process_npy_files(input_folder, output_folder, train_subfolder='train', trai
                 # Load the .npy file
                 data = np.load(input_path)
                 reduced_data_size = int(len(data) * percentage)
+                print(f"New size for {input_path}: {reduced_data_size}")
                 reduced_data = data[:reduced_data_size]
 
                 # Save the reduced data to the output folder
@@ -47,4 +48,4 @@ input_folder = './data/DL24FA'
 output_folder = './data/DL24FA_reduced'
 
 # Process the .npy files
-process_npy_files(input_folder, output_folder, train_subfolder='train', train_percentage=0.001, default_percentage=0.01)
+process_npy_files(input_folder, output_folder, train_subfolder='train', train_percentage=0.001, default_percentage=0.05)
