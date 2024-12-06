@@ -13,7 +13,7 @@ import os
 from torch.utils.data import Subset
 
 from dataset import create_wall_dataloader
-from models import JEPA_Model
+from models_jc import JEPA_Model
 from evaluator import ProbingEvaluator
 import torch.multiprocessing as mp
 
