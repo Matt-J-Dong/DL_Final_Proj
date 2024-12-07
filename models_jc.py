@@ -85,17 +85,21 @@ class ResNetEncoder(nn.Module):
         return nn.Sequential(*layers)
 
     def _forward_features(self, x):
-        # Forward pass through convolution and pooling layers
         x = self.conv1(x)
+        print(f"After conv1: {x.shape}")  # Debug
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
+        print(f"After maxpool: {x.shape}")  # Debug
 
-        # Forward pass through residual layers
         x = self.layer1(x)
+        print(f"After layer1: {x.shape}")  # Debug
         x = self.layer2(x)
+        print(f"After layer2: {x.shape}")  # Debug
         x = self.layer3(x)
+        print(f"After layer3: {x.shape}")  # Debug
         return x
+
 
     def forward(self, x):
         # Forward through feature extractor
