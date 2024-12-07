@@ -165,6 +165,7 @@ class JEPA_Model(nn.Module):
         self.action_dim = action_dim
         self.encoder = ResNetEncoder(output_dim=repr_dim, input_channels=2).to(device)
         self.target_encoder = ResNetEncoder(output_dim=repr_dim, input_channels=2).to(device)
+        self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim)
 
         # Copy weights
         self.target_encoder.load_state_dict(self.encoder.state_dict(), strict=False)
