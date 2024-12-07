@@ -47,7 +47,7 @@ class ResNetBlock(nn.Module):
 
 
 class ResNetEncoder(nn.Module):
-    def __init__(self, output_dim=256, input_channels=2, input_shape=(2, 64, 64)):
+    def __init__(self, output_dim=256, input_channels=2, input_size=64):
         super(ResNetEncoder, self).__init__()
         
         # Initial convolution layer to reduce spatial dimensions
@@ -61,11 +61,11 @@ class ResNetEncoder(nn.Module):
         self.layer2 = self._make_layer(64, 128, 2, stride=2)
         self.layer3 = self._make_layer(128, 256, 2, stride=2)
 
-        # Dynamically compute `fc_input_dim` based on input shape
-        dummy_input = torch.zeros(1, *input_shape)
+        # Dynamically compute the input dimension for the fully connected layer
+        dummy_input = torch.zeros(1, input_channels, input_size, input_size)
         with torch.no_grad():
-            x = self._forward_features(dummy_input)
-        self.fc_input_dim = x.numel()
+            dummy_output = self._forward_features(dummy_input)
+        self.fc_input_dim = dummy_output.numel()
 
         # Fully connected layer for output
         self.fc = nn.Linear(self.fc_input_dim, output_dim)
@@ -78,7 +78,8 @@ class ResNetEncoder(nn.Module):
                 nn.BatchNorm2d(out_channels),
             )
 
-        layers = [ResNetBlock(in_channels, out_channels, stride, downsample)]
+        layers = []
+        layers.append(ResNetBlock(in_channels, out_channels, stride, downsample))
         for _ in range(1, blocks):
             layers.append(ResNetBlock(out_channels, out_channels))
 
@@ -86,29 +87,24 @@ class ResNetEncoder(nn.Module):
 
     def _forward_features(self, x):
         x = self.conv1(x)
-        print(f"After conv1: {x.shape}")  # Debug
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-        print(f"After maxpool: {x.shape}")  # Debug
 
         x = self.layer1(x)
-        print(f"After layer1: {x.shape}")  # Debug
         x = self.layer2(x)
-        print(f"After layer2: {x.shape}")  # Debug
         x = self.layer3(x)
-        print(f"After layer3: {x.shape}")  # Debug
         return x
-
 
     def forward(self, x):
-        # Forward through feature extractor
+        # Pass through feature extraction layers
         x = self._forward_features(x)
-        
-        # Flatten and pass through fully connected layer
-        x = x.view(x.size(0), -1)  # Dynamically flatten based on feature map size
+
+        # Flatten and fully connected layer
+        x = x.view(x.size(0), -1)
         x = self.fc(x)
         return x
+
 
 
 
