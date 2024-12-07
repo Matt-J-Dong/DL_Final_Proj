@@ -104,14 +104,14 @@ def train_model(
                 print(
                     f"Epoch [{epoch}/{num_epochs}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}"
                 )
-                save_model(model, epoch+'_batch_'+batch_idx)
+                save_model(model, str(epoch)+'_batch_'+str(batch_idx))
 
         avg_epoch_loss = epoch_loss / len(train_loader)
         print(f"Epoch [{epoch}/{num_epochs}] Average Loss: {avg_epoch_loss:.4f}")
 
         # Save model checkpoint
         if epoch % save_every == 0:
-            save_model(model, epoch+'_final')
+            save_model(model, str(epoch)+'_final')
 
     print("Training completed.")
     return model
