@@ -87,6 +87,7 @@ def train_model(
             actions = batch.actions.to(device)  # [B, T-1, 2]
 
             # Perform a training step
+            print('pre train_step')
             loss = model.train_step(
                 states=states,
                 actions=actions,
@@ -94,6 +95,7 @@ def train_model(
                 optimizer=optimizer,
                 momentum=momentum,
             )
+            print('post train_step')
 
             epoch_loss += loss
 
