@@ -47,7 +47,7 @@ class ResNetBlock(nn.Module):
 
 
 class ResNetEncoder(nn.Module):
-    def __init__(self, output_dim=256, input_channels=2, input_size=64):
+    def __init__(self, output_dim=256, input_channels=2):
         super(ResNetEncoder, self).__init__()
         
         # Initial convolution layer to reduce spatial dimensions
@@ -61,14 +61,11 @@ class ResNetEncoder(nn.Module):
         self.layer2 = self._make_layer(64, 128, 2, stride=2)
         self.layer3 = self._make_layer(128, 256, 2, stride=2)
 
-        # Dynamically compute the input dimension for the fully connected layer
-        dummy_input = torch.zeros(1, input_channels, input_size, input_size)
-        with torch.no_grad():
-            dummy_output = self._forward_features(dummy_input)
-        self.fc_input_dim = dummy_output.numel()
+        # Adaptive pooling to ensure consistent output dimensions
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
 
         # Fully connected layer for output
-        self.fc = nn.Linear(self.fc_input_dim, output_dim)
+        self.fc = nn.Linear(256, output_dim)
 
     def _make_layer(self, in_channels, out_channels, blocks, stride=1):
         downsample = None
@@ -85,20 +82,20 @@ class ResNetEncoder(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def _forward_features(self, x):
+    def forward(self, x):
+        # Initial convolution and pooling
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
 
+        # Residual layers
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-        return x
 
-    def forward(self, x):
-        # Pass through feature extraction layers
-        x = self._forward_features(x)
+        # Adaptive global average pooling
+        x = self.global_avg_pool(x)
 
         # Flatten and fully connected layer
         x = x.view(x.size(0), -1)
