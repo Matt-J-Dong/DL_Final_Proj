@@ -47,7 +47,7 @@ class ResNetBlock(nn.Module):
 
 
 class ResNetEncoder(nn.Module):
-    def __init__(self, output_dim=256, input_channels=2):
+    def __init__(self, output_dim=256, input_channels=2, input_shape=(2, 64, 64)):
         super(ResNetEncoder, self).__init__()
         
         # Initial convolution layer to reduce spatial dimensions
@@ -61,9 +61,14 @@ class ResNetEncoder(nn.Module):
         self.layer2 = self._make_layer(64, 128, 2, stride=2)
         self.layer3 = self._make_layer(128, 256, 2, stride=2)
 
+        # Compute `fc_input_dim` dynamically based on input shape
+        dummy_input = torch.zeros(1, *input_shape)
+        with torch.no_grad():
+            x = self._forward_features(dummy_input)
+        self.fc_input_dim = x.numel()
+
         # Fully connected layer for output
-        self.fc_input_dim = None
-        self.fc = nn.Linear(256 * 8 * 8, output_dim)  # Default for input (64x64)
+        self.fc = nn.Linear(self.fc_input_dim, output_dim)
 
     def _make_layer(self, in_channels, out_channels, blocks, stride=1):
         downsample = None
@@ -73,29 +78,34 @@ class ResNetEncoder(nn.Module):
                 nn.BatchNorm2d(out_channels),
             )
 
-        layers = []
-        layers.append(ResNetBlock(in_channels, out_channels, stride, downsample))
+        layers = [ResNetBlock(in_channels, out_channels, stride, downsample)]
         for _ in range(1, blocks):
             layers.append(ResNetBlock(out_channels, out_channels))
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
-        # Initial convolution and pooling
+    def _forward_features(self, x):
+        # Forward pass through convolution and pooling layers
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
 
-        # Residual layers
+        # Forward pass through residual layers
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
+        return x
 
-        # Flatten and fully connected layer
+    def forward(self, x):
+        # Forward through feature extractor
+        x = self._forward_features(x)
+        
+        # Flatten and pass through fully connected layer
         x = x.view(x.size(0), -1)
         x = self.fc(x)
         return x
+
 
 
 
