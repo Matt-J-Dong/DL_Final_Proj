@@ -61,7 +61,7 @@ class ResNetEncoder(nn.Module):
         self.layer2 = self._make_layer(64, 128, 2, stride=2)
         self.layer3 = self._make_layer(128, 256, 2, stride=2)
 
-        # Compute `fc_input_dim` dynamically based on input shape
+        # Dynamically compute `fc_input_dim` based on input shape
         dummy_input = torch.zeros(1, *input_shape)
         with torch.no_grad():
             x = self._forward_features(dummy_input)
@@ -102,7 +102,7 @@ class ResNetEncoder(nn.Module):
         x = self._forward_features(x)
         
         # Flatten and pass through fully connected layer
-        x = x.view(x.size(0), -1)
+        x = x.view(x.size(0), -1)  # Dynamically flatten based on feature map size
         x = self.fc(x)
         return x
 
