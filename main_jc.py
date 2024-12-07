@@ -56,7 +56,7 @@ def load_model():
         name = k[7:] if k.startswith('module.') else k  # remove 'module.' prefix if present
         new_state_dict[name] = v
 
-    model.load_state_dict(new_state_dict)
+    model.load_state_dict(new_state_dict, strict=False)
     return model
 
 
