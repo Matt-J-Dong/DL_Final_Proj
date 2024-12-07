@@ -174,6 +174,8 @@ class JEPA_Model(nn.Module):
 
 
     def forward(self, states, actions):
+        if len(states.shape) == 4:  # Shape is [B, C, H, W]
+            states = states.unsqueeze(1)  # Add T dimension, new shape: [B, 1, C, H, W]
         B, T, C, H, W = states.shape
         pred_encs = []
 
