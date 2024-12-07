@@ -15,8 +15,6 @@ def build_mlp(layers_dims: List[int]):
     return nn.Sequential(*layers)
 
 
-from torch import nn
-import torch
 
 class ResNetBlock(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1, downsample=None):
