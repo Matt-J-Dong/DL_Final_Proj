@@ -24,21 +24,23 @@ class Encoder(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         # ResNet-like layers
-        self.layer1 = self._make_layer(BasicBlock, 64, 2)
-        self.layer2 = self._make_layer(BasicBlock, 128, 2, stride=2)
-        self.layer3 = self._make_layer(BasicBlock, 256, 2, stride=2)
+        self.layer1 = self._make_layer(BasicBlock, in_channels=64, out_channels=64, num_blocks=2, stride=1)
+        self.layer2 = self._make_layer(BasicBlock, in_channels=64, out_channels=128, num_blocks=2, stride=2)
+        self.layer3 = self._make_layer(BasicBlock, in_channels=128, out_channels=256, num_blocks=2, stride=2)
 
-        # Adaptive pooling and final fully connected layer
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(256, output_dim)
 
-    def _make_layer(self, block, out_channels, num_blocks, stride=1):
+    def _make_layer(self, block, in_channels, out_channels, num_blocks, stride=1):
         layers = []
-        # Adjust input channels for the first block
-        in_channels = out_channels // 2 if len(layers) == 0 else out_channels
+
+        # First block in the layer with stride and channel adjustment
         layers.append(block(in_channels, out_channels, stride=stride))
+        
+        # Remaining blocks
         for _ in range(1, num_blocks):
             layers.append(block(out_channels, out_channels))
+
         return nn.Sequential(*layers)
 
     def forward(self, x):
