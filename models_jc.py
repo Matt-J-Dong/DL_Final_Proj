@@ -118,6 +118,39 @@ class JEPA_Model(nn.Module):
 
         pred_encs = torch.stack(pred_encs, dim=1)
         return pred_encs
+    
+
+    def variance_regularization(self, states, epsilon=1e-4):
+        """
+        Prevents representation collapse by enforcing variance in each embedding dimension.
+
+        Args:
+            states: [B, D] Predicted embeddings.
+            epsilon: Minimum variance threshold.
+
+        Returns:
+            Regularization loss value.
+        """
+        std = torch.sqrt(states.var(dim=0) + 1e-10)
+        return torch.mean(torch.relu(epsilon - std))
+
+
+    def covariance_regularization(self, states):
+        """
+        Reduces redundancy by decorrelating dimensions of embeddings.
+
+        Args:
+            states: [B, D] Predicted embeddings.
+
+        Returns:
+            Regularization loss value.
+        """
+        batch_size, dim = states.size()
+        norm_states = states - states.mean(dim=0, keepdim=True)
+        cov_matrix = (norm_states.T @ norm_states) / (batch_size - 1)
+        off_diag = cov_matrix - torch.diag(torch.diag(cov_matrix))
+        return torch.sum(off_diag ** 2)
+
 
     def compute_energy(self, predicted_encs, target_encs, distance_function="l2"):
         """
@@ -145,17 +178,19 @@ class JEPA_Model(nn.Module):
     def train_step(self, states, actions, optimizer, momentum=0.99, distance_function="l2"):
         """
         Perform a single training step.
-        
+
         Args:
             states: [B, T, Ch, H, W]
             actions: [B, T-1, action_dim]
             optimizer: Optimizer
+            momentum: Momentum for target encoder update
             distance_function: Distance metric for energy computation
         """
         B, T, C, H, W = states.shape
         init_state = states[:, 0]
-        pred_encs = self.forward(init_state, actions)
+        pred_encs = self.forward(init_state, actions)  # Predicted embeddings
 
+        # Generate target embeddings using the target encoder
         target_encs = []
         for t in range(T):
             o_t = states[:, t]
@@ -163,15 +198,20 @@ class JEPA_Model(nn.Module):
             target_encs.append(s_target)
         target_encs = torch.stack(target_encs, dim=1)
 
-        # Compute energy (loss)
+        # Compute the energy function (distance between predicted and target states)
         loss = self.compute_energy(pred_encs, target_encs, distance_function)
+
+        # Add regularization terms
+        lambda_var, lambda_cov = 1.0, 1.0  # Tunable hyperparameters
+        loss += lambda_var * self.variance_regularization(pred_encs)
+        loss += lambda_cov * self.covariance_regularization(pred_encs)
 
         # Backpropagation
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        # Update target encoder
+        # Update target encoder using momentum
         with torch.no_grad():
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
