@@ -3,128 +3,147 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import List
-import numpy as np
+import math
 
-def build_mlp(layers_dims: List[int]):
-    layers = []
-    for i in range(len(layers_dims) - 2):
-        layers.append(nn.Linear(layers_dims[i], layers_dims[i + 1]))
-        layers.append(nn.BatchNorm1d(layers_dims[i + 1]))
-        layers.append(nn.ReLU(True))
-    layers.append(nn.Linear(layers_dims[-2], layers_dims[-1]))
-    return nn.Sequential(*layers)
+###############################################################################
+# Vision Transformer Encoder
+###############################################################################
+class PatchEmbed(nn.Module):
+    def __init__(self, img_size=64, patch_size=8, in_chans=2, embed_dim=256):
+        super().__init__()
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.grid_size = img_size // patch_size
+        num_patches = self.grid_size * self.grid_size
 
-
-class BasicBlock(nn.Module):
-    """A simple ResNet Basic Block."""
-    expansion = 1
-
-    def __init__(self, in_planes, planes, stride=1):
-        super(BasicBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride,
-                               padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.relu = nn.ReLU(True)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1,
-                               padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
-        
-        self.shortcut = nn.Sequential()
-        if stride != 1 or in_planes != planes:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, planes, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes)
-            )
-        
-    def forward(self, x):
-        out = self.relu(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
-        out += self.shortcut(x)
-        out = self.relu(out)
-        return out
-
-
-class SimpleResNet(nn.Module):
-    """
-    A simple ResNet-like model that takes an image and outputs a feature vector.
-    We'll assume the input is [B, C, H, W] with C=2, H=W=64 (as given).
-    """
-
-    def __init__(self, repr_dim=256):
-        super(SimpleResNet, self).__init__()
-        self.in_planes = 32
-        # Initial conv
-        self.conv1 = nn.Conv2d(2, 32, kernel_size=3, stride=2, padding=1, bias=False) # [B, 32, 32, 32]
-        self.bn1 = nn.BatchNorm2d(32)
-        self.relu = nn.ReLU(True)
-
-        # ResNet layers
-        self.layer1 = self._make_layer(32, 2, stride=2) # [B,32,16,16]
-        self.layer2 = self._make_layer(64, 2, stride=2) # [B,64,8,8]
-        self.layer3 = self._make_layer(128, 2, stride=2) # [B,128,4,4]
-        # Now we have [B,128,4,4] ~ 128*4*4=2048 features
-
-        # Increase features to 256 with one more layer
-        self.conv2 = nn.Conv2d(128, 256, kernel_size=1, stride=1, bias=False) # [B,256,4,4]
-        self.bn2 = nn.BatchNorm2d(256)
-
-        # Flatten and FC
-        # 256 * 4 *4 = 4096 features
-        self.fc = nn.Linear(256*4*4, repr_dim)
-
-    def _make_layer(self, planes, blocks, stride):
-        layers = []
-        layers.append(BasicBlock(self.in_planes, planes, stride))
-        self.in_planes = planes
-        for _ in range(1, blocks):
-            layers.append(BasicBlock(self.in_planes, planes, 1))
-        return nn.Sequential(*layers)
+        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches+1, embed_dim))
+        nn.init.trunc_normal_(self.pos_embed, std=.02)
 
     def forward(self, x):
-        # x: [B,2,64,64]
-        x = self.relu(self.bn1(self.conv1(x)))  # [B,32,32,32]
-        x = self.layer1(x) # [B,32,16,16]
-        x = self.layer2(x) # [B,64,8,8]
-        x = self.layer3(x) # [B,128,4,4]
-        x = self.bn2(self.conv2(x)) # [B,256,4,4]
+        # x: [B, 2, H, W]
+        B, C, H, W = x.shape
+        x = self.proj(x) # [B, embed_dim, H/patch, W/patch]
+        x = x.flatten(2).transpose(1,2) # [B, num_patches, embed_dim]
 
-        x = x.view(x.size(0), -1) # [B, 4096]
-        x = self.fc(x) # [B,256]
+        cls_token = self.cls_token.expand(B, -1, -1) # [B,1,embed_dim]
+        x = torch.cat((cls_token, x), dim=1) # [B, num_patches+1, embed_dim]
+
+        x = x + self.pos_embed
         return x
 
 
-class SimpleResNetModel(nn.Module):
-    """
-    This model ignores actions and just returns the same embedding for each timestep.
-    It takes (init_state, actions) and returns embeddings [B,T,D].
-    """
-    def __init__(self, device="cuda", repr_dim=256, action_dim=2):
-        super(SimpleResNetModel, self).__init__()
+class TransformerEncoderBlock(nn.Module):
+    def __init__(self, dim=256, num_heads=4, mlp_ratio=4.0, drop=0.0):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(dim)
+        self.attn = nn.MultiheadAttention(embed_dim=dim, num_heads=num_heads, dropout=drop, batch_first=True)
+        self.norm2 = nn.LayerNorm(dim)
+        self.mlp = nn.Sequential(
+            nn.Linear(dim, int(dim*mlp_ratio)),
+            nn.ReLU(True),
+            nn.Linear(int(dim*mlp_ratio), dim),
+            nn.Dropout(drop)
+        )
+
+    def forward(self, x):
+        x = x + self.attn(self.norm1(x), self.norm1(x), self.norm1(x))[0]
+        x = x + self.mlp(self.norm2(x))
+        return x
+
+
+class VisionTransformerEncoder(nn.Module):
+    def __init__(self, img_size=64, patch_size=8, in_chans=2, embed_dim=256, depth=4, num_heads=4, mlp_ratio=4.0):
+        super().__init__()
+        self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
+        self.blocks = nn.ModuleList([TransformerEncoderBlock(dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)])
+        self.norm = nn.LayerNorm(embed_dim)
+
+    def forward(self, x):
+        # x: [B,2,H,W]
+        x = self.patch_embed(x) # [B, num_patches+1, embed_dim]
+        for blk in self.blocks:
+            x = blk(x)
+        x = self.norm(x)
+        # Take the cls_token output as the image embedding
+        cls_emb = x[:,0] # [B,embed_dim]
+        return cls_emb
+
+
+###############################################################################
+# Predictor (Decoder)
+#
+# Given the previous embedding s_{t-1} and action u_{t-1}, predict next embedding s_t.
+# We'll use a GRU for simplicity.
+###############################################################################
+class Predictor(nn.Module):
+    def __init__(self, state_dim=256, action_dim=2, hidden_dim=256):
+        super().__init__()
+        # Input to the GRU: previous state + action
+        self.gru = nn.GRU(state_dim + action_dim, hidden_dim, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, state_dim)
+
+    def forward(self, s_prev, u_prev):
+        # s_prev: [B, D], u_prev: [B, A]
+        # Combine them and add a seq dim for GRU
+        x = torch.cat([s_prev, u_prev], dim=-1).unsqueeze(1) # [B,1,D+A]
+        output, _ = self.gru(x) # [B,1,H]
+        s_pred = self.fc(output.squeeze(1)) # [B,D]
+        return s_pred
+
+
+###############################################################################
+# JEPA Model (ViT Encoder + GRU Predictor + Target Encoder)
+###############################################################################
+class JEPA_ViTModel(nn.Module):
+    def __init__(self, device="cuda", repr_dim=256, action_dim=2, img_size=64):
+        super(JEPA_ViTModel, self).__init__()
         self.device = device
         self.repr_dim = repr_dim
         self.action_dim = action_dim
-        self.encoder = SimpleResNet(repr_dim=repr_dim).to(device)
 
-    def forward(self, init_state, actions):
-        # init_state: [B,C,H,W]
-        # actions: [B,T-1,action_dim]
-        # We will produce T = (T-1)+1 steps of embeddings
-        B = init_state.size(0)
-        if actions.ndim == 3:
-            T_minus_one = actions.size(1)
-        else:
-            T_minus_one = 0
-        T = T_minus_one + 1
+        # Encoder and Target Encoder
+        self.encoder = VisionTransformerEncoder(img_size=img_size, embed_dim=repr_dim).to(device)
+        self.target_encoder = VisionTransformerEncoder(img_size=img_size, embed_dim=repr_dim).to(device)
+        self.target_encoder.load_state_dict(self.encoder.state_dict())
+        for param in self.target_encoder.parameters():
+            param.requires_grad = False
 
-        s_0 = self.encoder(init_state) # [B,D]
+        # Predictor (Decoder)
+        self.predictor = Predictor(state_dim=repr_dim, action_dim=action_dim, hidden_dim=repr_dim).to(device)
 
-        # Just repeat s_0 for all T steps
-        s_all = s_0.unsqueeze(1).repeat(1, T, 1) # [B,T,D]
-        return s_all
+    def forward(self, states, actions):
+        """
+        states: [B,T,C,H,W]
+        actions: [B,T-1,2]
 
-    @property
-    def repr_dim(self):
-        return 256
+        Output:
+            predicted_embeddings: [B,T,D]
+        """
+        B, T, C, H, W = states.shape
+        device = states.device
+
+        # Get initial state embedding s_0
+        o_0 = states[:,0] # [B,C,H,W]
+        s_0 = self.encoder(o_0) # [B,D]
+
+        pred_encs = [s_0]
+        s_prev = s_0
+
+        for t in range(1,T):
+            u_prev = actions[:, t-1] # [B,2]
+            s_pred = self.predictor(s_prev, u_prev) # [B,D]
+            pred_encs.append(s_pred)
+            s_prev = s_pred
+
+        pred_encs = torch.stack(pred_encs, dim=1) # [B,T,D]
+        return pred_encs
+
+    def update_target_encoder(self, momentum=0.99):
+        with torch.no_grad():
+            for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
+                param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
 
 
 class Prober(nn.Module):
@@ -135,6 +154,7 @@ class Prober(nn.Module):
         output_shape: List[int],
     ):
         super().__init__()
+        import numpy as np
         self.output_dim = np.prod(output_shape)
         self.output_shape = output_shape
         self.arch = arch
