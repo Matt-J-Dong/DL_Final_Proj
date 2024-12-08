@@ -18,22 +18,27 @@ def build_mlp(layers_dims: List[int]):
 class Encoder(nn.Module):
     def __init__(self, output_dim=256):
         super(Encoder, self).__init__()
-        # ResNet-like architecture without pretrained weights
         self.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        # ResNet-like layers
         self.layer1 = self._make_layer(BasicBlock, 64, 2)
         self.layer2 = self._make_layer(BasicBlock, 128, 2, stride=2)
         self.layer3 = self._make_layer(BasicBlock, 256, 2, stride=2)
+
+        # Adaptive pooling and final fully connected layer
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(256, output_dim)
 
-    def _make_layer(self, block, planes, blocks, stride=1):
+    def _make_layer(self, block, out_channels, num_blocks, stride=1):
         layers = []
-        for _ in range(blocks):
-            layers.append(block(planes, planes, stride=stride))
-            stride = 1  # Only apply stride on the first block of the layer
+        # Adjust input channels for the first block
+        in_channels = out_channels // 2 if len(layers) == 0 else out_channels
+        layers.append(block(in_channels, out_channels, stride=stride))
+        for _ in range(1, num_blocks):
+            layers.append(block(out_channels, out_channels))
         return nn.Sequential(*layers)
 
     def forward(self, x):
