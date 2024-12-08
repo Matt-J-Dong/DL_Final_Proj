@@ -32,12 +32,18 @@ class Encoder(nn.Module):
         self.fc = nn.Linear(256, output_dim)
 
     def _make_layer(self, block, in_channels, out_channels, num_blocks, stride=1):
-        layers = []
+        downsample = None
+        # Add a downsample layer if channel dimensions or spatial dimensions differ
+        if stride != 1 or in_channels != out_channels:
+            downsample = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_channels),
+            )
 
-        # First block in the layer with stride and channel adjustment
-        layers.append(block(in_channels, out_channels, stride=stride))
-        
-        # Remaining blocks
+        layers = []
+        # First block with downsample (if needed)
+        layers.append(block(in_channels, out_channels, stride=stride, downsample=downsample))
+        # Subsequent blocks
         for _ in range(1, num_blocks):
             layers.append(block(out_channels, out_channels))
 
