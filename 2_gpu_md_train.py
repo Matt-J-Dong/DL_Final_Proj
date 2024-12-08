@@ -19,23 +19,18 @@ def get_device(local_rank):
     print(f"Process {dist.get_rank()} using device: {device}")
     return device
 
-def load_data(batch_size=512, is_distributed=False):
+def load_data(device, batch_size=64, is_distributed=False):
     data_path = "/scratch/DL24FA"
-    # Load dataset using create_wall_dataloader which returns a DataLoader
-    # To use a DistributedSampler, we need direct access to the dataset.
-    # We will modify approach: we assume create_wall_dataloader returns a dataset if needed
-    # If create_wall_dataloader doesn't allow that, we need a slight refactor.
-    # For simplicity, let's assume create_wall_dataloader can return a dataset directly:
-    # If not, you must implement a function that returns just the dataset.
-
+    # Assuming create_wall_dataloader now returns the dataset if return_dataset_only is True
     ds = create_wall_dataloader(
         data_path=f"{data_path}/train",
         probing=False,
-        device='cpu',  # load on CPU only, no .to(device) in dataset
-        return_dataset_only=True  # Assume we modified create_wall_dataloader to allow this
+        device='cpu',  # load dataset on CPU
+        return_dataset_only=True
     )
 
     if is_distributed:
+        from torch.utils.data import DistributedSampler
         sampler = DistributedSampler(ds, shuffle=True)
         train_loader = torch.utils.data.DataLoader(
             ds,
@@ -47,7 +42,6 @@ def load_data(batch_size=512, is_distributed=False):
         )
         return train_loader, sampler
     else:
-        # Non-distributed
         train_loader = torch.utils.data.DataLoader(
             ds,
             batch_size=batch_size,
@@ -145,8 +139,6 @@ def train_model(
     return model
 
 def main():
-    # Distributed init
-    # If running single GPU without DDP, set WORLD_SIZE=1 and RANK=0 in env.
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     world_size = int(os.environ.get("WORLD_SIZE", 1))
     rank = int(os.environ.get("RANK", 0))
@@ -161,17 +153,12 @@ def main():
     learning_rate = 1e-3
     momentum = 0.99
 
-    # for multiprocessing
     mp.set_start_method('spawn', force=True)
 
     is_distributed = (world_size > 1)
     train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=is_distributed)
 
-    # Initialize the JEPA model
-    model = JEPA_Model(device=device, repr_dim=256, action_dim=2)
-    model.to(device)
-
-    # If distributed, wrap with DDP
+    model = JEPA_Model(device=device, repr_dim=256, action_dim=2).to(device)
     if is_distributed:
         model = DDP(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
 
