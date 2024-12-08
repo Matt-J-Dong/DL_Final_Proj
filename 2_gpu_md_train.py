@@ -19,7 +19,7 @@ def get_device(local_rank):
     print(f"Process {dist.get_rank()} using device: {device}")
     return device
 
-def load_data(batch_size=64, is_distributed=False):
+def load_data(batch_size=512, is_distributed=False):
     data_path = "/scratch/DL24FA"
     # Load dataset using create_wall_dataloader which returns a DataLoader
     # To use a DistributedSampler, we need direct access to the dataset.
