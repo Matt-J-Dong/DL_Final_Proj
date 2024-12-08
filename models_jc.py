@@ -209,6 +209,10 @@ class JEPA_Model(nn.Module):
         # Backpropagation
         optimizer.zero_grad()
         loss.backward()
+
+        max_grad_norm = 1.0  # Set the maximum norm for gradients
+        torch.nn.utils.clip_grad_norm_(self.parameters(), max_grad_norm)
+
         optimizer.step()
 
         # Update target encoder using momentum
