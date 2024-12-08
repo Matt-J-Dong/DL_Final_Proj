@@ -148,4 +148,72 @@ def main():
     # Distributed init
     # If running single GPU without DDP, set WORLD_SIZE=1 and RANK=0 in env.
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    world_size = int(os.environ.ge)
+    world_size = int(os.environ.get("WORLD_SIZE", 1))
+    rank = int(os.environ.get("RANK", 0))
+
+    if world_size > 1:
+        dist.init_process_group(backend='nccl', init_method='env://', world_size=world_size, rank=rank)
+
+    device = get_device(local_rank)
+
+    batch_size = 512
+    num_epochs = 10
+    learning_rate = 1e-3
+    momentum = 0.99
+
+    # for multiprocessing
+    mp.set_start_method('spawn', force=True)
+
+    is_distributed = (world_size > 1)
+    train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=is_distributed)
+
+    # Initialize the JEPA model
+    model = JEPA_Model(device=device, repr_dim=256, action_dim=2)
+    model.to(device)
+
+    # If distributed, wrap with DDP
+    if is_distributed:
+        model = DDP(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
+
+    # Load from checkpoint if exists
+    checkpoint_path = "./checkpoints/jepa_model_epoch_10_final.pth"  # Example, adjust as needed
+    start_epoch = 0
+    if os.path.exists(checkpoint_path):
+        # Only load on rank 0 then broadcast
+        if rank == 0:
+            print(f"Rank 0 loading checkpoint from {checkpoint_path}")
+            checkpoint = torch.load(checkpoint_path, map_location='cpu')
+            model.module.load_state_dict(checkpoint['model_state_dict']) if is_distributed else model.load_state_dict(checkpoint['model_state_dict'])
+            start_epoch = checkpoint['epoch']
+            print(f"Resuming from epoch {start_epoch+1}")
+        # Broadcast start_epoch to all ranks
+        if is_distributed:
+            start_epoch_tensor = torch.tensor(start_epoch, device=device)
+            dist.broadcast(start_epoch_tensor, src=0)
+            start_epoch = start_epoch_tensor.item()
+
+    # Train the model
+    trained_model = train_model(
+        device=device,
+        model=model,
+        train_loader=train_loader,
+        num_epochs=num_epochs,
+        learning_rate=learning_rate,
+        momentum=momentum,
+        save_every=1,
+        train_sampler=train_sampler,
+        distance_function="l2",
+        start_epoch=start_epoch
+    )
+
+    # Save the final model (only rank 0)
+    if rank == 0:
+        save_model(trained_model.module if is_distributed else trained_model, "final")
+
+    # Cleanup DDP
+    if is_distributed:
+        dist.barrier()
+        dist.destroy_process_group()
+
+if __name__ == "__main__":
+    main()
