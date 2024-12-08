@@ -26,7 +26,8 @@ def load_data(device, batch_size=64, is_distributed=False):
         data_path=f"{data_path}/train",
         probing=False,
         device='cpu',  # load dataset on CPU
-        return_dataset_only=True
+        batch_size=512,
+        train=True
     )
 
     if is_distributed:
