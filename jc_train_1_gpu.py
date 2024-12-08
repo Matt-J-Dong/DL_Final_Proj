@@ -71,9 +71,9 @@ def train_model(
     learning_rate=1e-3,
     momentum=0.99,
     save_every=1,
-    train_sampler=None
+    train_sampler=None,
+    distance_function="l2"  # Specify the distance function for the energy loss
 ):
-    criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     model.train()
@@ -87,16 +87,14 @@ def train_model(
             states = batch.states.to(device)  # [B, T, 2, 64, 64]
             actions = batch.actions.to(device)  # [B, T-1, 2]
 
-            # Perform a training step
-            # print('pre train_step')
+            # Perform a training step using the energy function as loss
             loss = model.train_step(
                 states=states,
                 actions=actions,
-                criterion=criterion,
                 optimizer=optimizer,
                 momentum=momentum,
+                distance_function=distance_function,  # Use energy-based loss
             )
-            # print('post train_step')
 
             epoch_loss += loss
 
@@ -104,14 +102,14 @@ def train_model(
                 print(
                     f"Epoch [{epoch}/{num_epochs}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}"
                 )
-                save_model(model, str(epoch)+'_batch_'+str(batch_idx))
+                save_model(model, f"{epoch}_batch_{batch_idx}")
 
         avg_epoch_loss = epoch_loss / len(train_loader)
         print(f"Epoch [{epoch}/{num_epochs}] Average Loss: {avg_epoch_loss:.4f}")
 
         # Save model checkpoint
         if epoch % save_every == 0:
-            save_model(model, str(epoch)+'_final')
+            save_model(model, f"{epoch}_final")
 
     print("Training completed.")
     return model
