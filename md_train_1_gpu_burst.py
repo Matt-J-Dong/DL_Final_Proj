@@ -2,7 +2,6 @@
 singularity exec --nv --overlay /scratch/$USER/my_env/overlay-15GB-500K.ext3:ro /scratch/work/public/singularity/cuda12.3.2-cudnn9.0.0-ubuntu-22.04.4.sif /bin/bash
 source /ext3/env.sh
 cd /scratch/dq2024/DL_Final_Proj/
-
 '''
 
 import torch
@@ -11,13 +10,12 @@ import torch.optim as optim
 from tqdm.auto import tqdm
 import os
 from torch.utils.data import Subset
+from glob import glob
 
 from dataset import create_wall_dataloader
 from models_md import JEPA_Model
 from evaluator import ProbingEvaluator
 import torch.multiprocessing as mp
-
-
 
 def get_device():
     """Set the device for single-GPU training."""
@@ -40,28 +38,50 @@ def load_data(device, batch_size=64, is_distributed=False, subset_size=1000):
         batch_size=batch_size,
     )
 
-    # Create a subset of the dataset for testing (if desired)
-    # train_dataset = train_loader.dataset
-
-    # if we want to test with smaller subset of data
-    # indices = list(range(subset_size))
-    # train_dataset = Subset(train_dataset, indices)
-
-    # Without distributed, just use a standard DataLoader
-    # train_loader = torch.utils.data.DataLoader(
-    #     train_dataset,
-    #     batch_size=batch_size,
-    #     shuffle=True,
-    # )
-
     return train_loader, None
 
-def save_model(model, epoch, save_path="checkpoints"):
+def save_model(model, optimizer, epoch, batch, save_path="checkpoints"):
+    """
+    Save the model and optimizer state_dicts, along with the current epoch and batch.
+    """
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-    save_file = os.path.join(save_path, f"jepa_model_epoch_{epoch}.pth")
-    torch.save(model.state_dict(), save_file)
-    print(f"Model saved to {save_file}")
+    save_file = os.path.join(save_path, f"jepa_model_epoch_{epoch}_batch_{batch}.pth")
+    checkpoint = {
+        'epoch': epoch,
+        'batch': batch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+    }
+    torch.save(checkpoint, save_file)
+    print(f"Checkpoint saved to {save_file}")
+
+def load_checkpoint(model, optimizer, save_path="checkpoints"):
+    """
+    Load the latest checkpoint from the save_path.
+    Returns the starting epoch and batch. If no checkpoint is found, returns (1, 0).
+    """
+    checkpoint_files = glob(os.path.join(save_path, "jepa_model_epoch_*_batch_*.pth"))
+    if not checkpoint_files:
+        print("No checkpoint found. Starting training from scratch.")
+        return 1, 0  # Starting epoch and batch
+
+    # Sort checkpoints by epoch and batch
+    checkpoint_files.sort(key=lambda x: (
+        int(x.split("_epoch_")[1].split("_")[0]),
+        int(x.split("_batch_")[1].split(".pth")[0])
+    ), reverse=True)
+
+    latest_checkpoint = checkpoint_files[0]
+    print(f"Loading checkpoint from {latest_checkpoint}")
+    checkpoint = torch.load(latest_checkpoint, map_location=model.device)
+
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    start_epoch = checkpoint['epoch']
+    start_batch = checkpoint['batch'] + 1  # Start from the next batch
+    print(f"Resuming from epoch {start_epoch}, batch {start_batch}")
+    return start_epoch, start_batch
 
 def train_model(
     device,
@@ -71,19 +91,37 @@ def train_model(
     learning_rate=1e-3,
     momentum=0.99,
     save_every=1,
+    save_every_batch=50,
     train_sampler=None,
     distance_function="l2"  # Specify the distance function for the energy loss
 ):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
+    # Attempt to load from the latest checkpoint
+    start_epoch, start_batch = load_checkpoint(model, optimizer, save_path="checkpoints")
+
     model.train()
 
-    for epoch in range(1, num_epochs + 1):
+    for epoch in range(start_epoch, num_epochs + 1):
         if train_sampler is not None:
             train_sampler.set_epoch(epoch)
         epoch_loss = 0.0
 
-        for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
+        # If resuming from a checkpoint, adjust the iterator to start from the correct batch
+        if epoch == start_epoch and start_batch > 0:
+            data_iter = iter(train_loader)
+            for _ in range(start_batch):
+                try:
+                    next(data_iter)
+                except StopIteration:
+                    break
+        else:
+            data_iter = iter(train_loader)
+            start_batch = 0  # Reset start_batch for new epochs
+
+        for batch_idx, batch in enumerate(tqdm(data_iter, desc=f"Epoch {epoch}")):
+            global_batch_idx = batch_idx + 1 if epoch != start_epoch else batch_idx + start_batch + 1
+
             states = batch.states.to(device)  # [B, T, 2, 64, 64]
             actions = batch.actions.to(device)  # [B, T-1, 2]
 
@@ -98,18 +136,18 @@ def train_model(
 
             epoch_loss += loss
 
-            if batch_idx % 100 == 0:
+            if global_batch_idx % save_every_batch == 0:
                 print(
-                    f"Epoch [{epoch}/{num_epochs}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}"
+                    f"Epoch [{epoch}/{num_epochs}], Batch [{global_batch_idx}/{len(train_loader)}], Loss: {loss:.4f}"
                 )
-                save_model(model, f"{epoch}_batch_{batch_idx}")
+                save_model(model, optimizer, epoch, global_batch_idx)
 
         avg_epoch_loss = epoch_loss / len(train_loader)
         print(f"Epoch [{epoch}/{num_epochs}] Average Loss: {avg_epoch_loss:.4f}")
 
-        # Save model checkpoint
+        # Save model checkpoint at the end of the epoch
         if epoch % save_every == 0:
-            save_model(model, f"{epoch}_final")
+            save_model(model, optimizer, epoch, global_batch_idx)
 
     print("Training completed.")
     return model
@@ -141,11 +179,12 @@ def main():
         learning_rate=learning_rate,
         momentum=momentum,
         save_every=1,
+        save_every_batch=50,  # Save every 50 batches
         train_sampler=train_sampler
     )
 
     # Save the final model
-    save_model(trained_model, "final")
+    save_model(trained_model, optimizer=None, epoch="final", batch="final")
 
 if __name__ == "__main__":
     main()
