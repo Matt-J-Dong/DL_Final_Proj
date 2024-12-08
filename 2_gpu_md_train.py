@@ -148,4 +148,4 @@ def main():
     # Distributed init
     # If running single GPU without DDP, set WORLD_SIZE=1 and RANK=0 in env.
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    world_size = int(os.environ.ge
+    world_size = int(os.environ.ge)
