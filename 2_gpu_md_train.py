@@ -104,7 +104,7 @@ def save_model(model, optimizer, epoch, batch, save_path="checkpoints_2gpu", is_
     print(f"[Rank {rank}] Checkpoint saved to {save_file}")
 
 
-def load_checkpoint(model, optimizer, save_path="checkpoints_2gpu", is_main_process=True):
+def load_checkpoint(model, optimizer, save_path="checkpoints_2gpu", is_main_process=True, device=torch.device('cuda')):
     """
     Load the latest checkpoint from the save_path.
     Returns the starting epoch and batch. If no checkpoint is found, returns (1, 0).
@@ -115,6 +115,7 @@ def load_checkpoint(model, optimizer, save_path="checkpoints_2gpu", is_main_proc
         optimizer (torch.optim.Optimizer or None): The optimizer to load the state into.
         save_path (str): Directory path to load the checkpoint from.
         is_main_process (bool): Flag indicating if the current process is the main process.
+        device (torch.device): The device to move tensors to.
 
     Returns:
         tuple: (start_epoch (int), start_batch (int))
@@ -164,8 +165,8 @@ def load_checkpoint(model, optimizer, save_path="checkpoints_2gpu", is_main_proc
 
     # Broadcast the start_epoch and start_batch from main process to all other processes
     if dist.is_initialized():
-        start_epoch_tensor = torch.tensor(start_epoch).to(device='cuda')
-        start_batch_tensor = torch.tensor(start_batch).to(device='cuda')
+        start_epoch_tensor = torch.tensor(start_epoch).to(device)
+        start_batch_tensor = torch.tensor(start_batch).to(device)
         dist.broadcast(start_epoch_tensor, src=0)
         dist.broadcast(start_batch_tensor, src=0)
         start_epoch = start_epoch_tensor.item()
@@ -216,7 +217,7 @@ def train_model(
     is_main_process = dist.get_rank() == 0
 
     # Attempt to load from the latest checkpoint
-    start_epoch, start_batch = load_checkpoint(model, optimizer, save_path="checkpoints_2gpu", is_main_process=is_main_process)
+    start_epoch, start_batch = load_checkpoint(model, optimizer, save_path="checkpoints_2gpu", is_main_process=is_main_process, device=device)
 
     # Ensure all processes start from the same epoch and batch
     dist.barrier()
