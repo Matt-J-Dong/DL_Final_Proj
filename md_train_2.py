@@ -98,7 +98,7 @@ def train_model(
 
             epoch_loss += loss
 
-            if batch_idx % 100 == 0:
+            if batch_idx % 50 == 0:
                 print(
                     f"Epoch [{epoch}/{num_epochs}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}"
                 )
