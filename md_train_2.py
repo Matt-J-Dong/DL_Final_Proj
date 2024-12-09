@@ -4,7 +4,7 @@ import torch.optim as optim
 from tqdm.auto import tqdm
 import os
 from dataset import create_wall_dataloader
-from models import JEPA_Model
+from models_md import JEPA_Model
 import torch.multiprocessing as mp
 import glob
 
