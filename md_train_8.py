@@ -72,8 +72,8 @@ def load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints"):
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
-    start_epoch = checkpoint['epoch']
-    start_batch_idx = checkpoint['batch_idx']
+    start_epoch = int(checkpoint['epoch'])
+    start_batch_idx = int(checkpoint['batch_idx'])
 
     # If batch_idx == -1, it means we saved at the end of an epoch.
     # In that case, we start at the next epoch, batch 0.
@@ -293,7 +293,7 @@ def main():
 
                 # Save the final model
                 optimizer = optim.Adam(trained_model.parameters(), lr=lr, weight_decay=1e-4)
-                save_model(trained_model, optimizer, "final_epoch", -1)
+                save_model(trained_model, optimizer, num_epochs, -1)  # Use num_epochs instead of "final_epoch"
 
                 wandb.finish()
 
