@@ -7,7 +7,7 @@ import glob
 import torch.multiprocessing as mp
 
 from dataset import create_wall_dataloader
-from models_md_6 import JEPA_Model
+from models_md_5 import JEPA_Model
 from evaluator import ProbingEvaluator
 
 def get_device():
@@ -35,9 +35,9 @@ def save_model(model, optimizer, epoch, batch_idx, save_path="checkpoints"):
         os.makedirs(save_path)
     if batch_idx == -1:
         # Use a "final" suffix for end-of-epoch checkpoint
-        save_file = os.path.join(save_path, f"jepa_model_6_epoch_{epoch}_final.pth")
+        save_file = os.path.join(save_path, f"jepa_model_5_epoch_{epoch}_final.pth")
     else:
-        save_file = os.path.join(save_path, f"jepa_model_6_epoch_{epoch}_batch_{batch_idx}.pth")
+        save_file = os.path.join(save_path, f"jepa_model_5_epoch_{epoch}_batch_{batch_idx}.pth")
     torch.save({
         'epoch': epoch,
         'batch_idx': batch_idx,
@@ -50,8 +50,8 @@ def load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints"):
     if not os.path.exists(checkpoint_dir):
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
     # Include both final and batch checkpoints
-    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_6_epoch_*_batch_*.pth")) + \
-                       glob.glob(os.path.join(checkpoint_dir, "jepa_model_6_epoch_*_final.pth"))
+    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_5_epoch_*_batch_*.pth")) + \
+                       glob.glob(os.path.join(checkpoint_dir, "jepa_model_5_epoch_*_final.pth"))
     if len(checkpoint_files) == 0:
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
 
@@ -87,7 +87,7 @@ def train_model(
     save_every=1,
     train_sampler=None,
     distance_function="l2",
-    dropout=0.2
+    dropout=0.1
 ):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     # Example scheduler: reduce LR by 0.1 every 5 epochs
@@ -97,9 +97,11 @@ def train_model(
     model.to(device)
     model.train()
 
-    # We will create a ProbingEvaluator after the main model is done with an epoch of training.
-    # This evaluator will be used to train a prober and evaluate on val sets.
     val_ds = {"normal": probe_val_normal_ds, "wall": probe_val_wall_ds}
+
+    # Early stopping variables
+    best_val_loss_normal = None
+    worse_count = 0
 
     for epoch in range(start_epoch, num_epochs + 1):
         if train_sampler is not None:
@@ -133,7 +135,7 @@ def train_model(
         avg_epoch_loss = epoch_loss / len(train_loader)
         print(f"Epoch [{epoch}/{num_epochs}] Average Loss: {avg_epoch_loss:.4f}")
 
-        # Run evaluation using the evaluator and prober from evaluator.py
+        # Run evaluation using the evaluator and prober
         model.eval()
         evaluator = ProbingEvaluator(
             device=device,
@@ -143,14 +145,31 @@ def train_model(
             quick_debug=False
         )
 
-        # Train a prober to decode predicted embeddings into locations
         prober = evaluator.train_pred_prober()
-        # Evaluate prober on normal and wall validation sets
         avg_losses = evaluator.evaluate_all(prober=prober)
-        for probe_attr, loss_val in avg_losses.items():
-            print(f"Validation {probe_attr} loss: {loss_val:.4f}")
+        # Extract the normal validation loss
+        val_loss_normal = avg_losses["normal"]
+        print(f"Validation normal loss: {val_loss_normal:.4f}")
+        print(f"Validation wall loss: {avg_losses['wall']:.4f}")
 
         model.train()
+
+        # Early stopping logic
+        if best_val_loss_normal is None:
+            # First epoch of validation, just record it
+            best_val_loss_normal = val_loss_normal
+            worse_count = 0
+        else:
+            if val_loss_normal > best_val_loss_normal:
+                # Validation loss got worse
+                worse_count += 1
+                if worse_count == 2:
+                    print("Early stopping triggered: Validation loss increased 2 epochs in a row.")
+                    break
+            else:
+                # Improved or stayed the same
+                best_val_loss_normal = val_loss_normal
+                worse_count = 0
 
         # Reset start_batch_idx for next epoch
         start_batch_idx = 0
