@@ -54,6 +54,7 @@ def save_model(model, optimizer, epoch, batch_idx, save_path="checkpoints"):
     print(f"Model saved to {save_file}")
 
 def load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints"):
+    device = get_device()
     if not os.path.exists(checkpoint_dir):
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
     # Include both final and batch checkpoints
