@@ -42,7 +42,7 @@ def load_data(device):
 def load_model(checkpoint_path="./checkpoints"):
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError("No checkpoint directory found.")
-    checkpoint_files = glob.glob(os.path.join(checkpoint_path, "jepa_model_epoch_*_batch_*.pth"))
+    checkpoint_files = glob.glob(os.path.join(checkpoint_path, "jepa_model_3_epoch_*_batch_*.pth"))
     if len(checkpoint_files) == 0:
         raise FileNotFoundError("No checkpoint found in the directory.")
     checkpoint_files.sort(key=os.path.getmtime)
