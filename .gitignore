@@ -7,3 +7,4 @@ data/states.npy
 data/DL24FA
 data/
 checkpoints/*
+.env

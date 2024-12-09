@@ -7,8 +7,14 @@ import glob
 import torch.multiprocessing as mp
 
 from dataset import create_wall_dataloader
-from models_md_6 import JEPA_Model
+from models_md_7 import JEPA_Model
 from evaluator import ProbingEvaluator
+from dotenv import load_dotenv
+import wandb
+
+load_dotenv()
+WANDB_KEY = os.getenv("WANDB_KEY")
+wandb.login(key=WANDB_KEY)
 
 def get_device():
     """Set the device for single-GPU training."""
@@ -35,9 +41,9 @@ def save_model(model, optimizer, epoch, batch_idx, save_path="checkpoints"):
         os.makedirs(save_path)
     if batch_idx == -1:
         # Use a "final" suffix for end-of-epoch checkpoint
-        save_file = os.path.join(save_path, f"jepa_model_6_epoch_{epoch}_final.pth")
+        save_file = os.path.join(save_path, f"jepa_model_7_epoch_{epoch}_final.pth")
     else:
-        save_file = os.path.join(save_path, f"jepa_model_6_epoch_{epoch}_batch_{batch_idx}.pth")
+        save_file = os.path.join(save_path, f"jepa_model_7_epoch_{epoch}_batch_{batch_idx}.pth")
     torch.save({
         'epoch': epoch,
         'batch_idx': batch_idx,
@@ -50,8 +56,8 @@ def load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints"):
     if not os.path.exists(checkpoint_dir):
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
     # Include both final and batch checkpoints
-    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_6_epoch_*_batch_*.pth")) + \
-                       glob.glob(os.path.join(checkpoint_dir, "jepa_model_6_epoch_*_final.pth"))
+    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_7_epoch_*_batch_*.pth")) + \
+                       glob.glob(os.path.join(checkpoint_dir, "jepa_model_7_epoch_*_final.pth"))
     if len(checkpoint_files) == 0:
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
 
@@ -90,8 +96,18 @@ def train_model(
     dropout=0.1
 ):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    # Example scheduler: reduce LR by 0.1 every 5 epochs
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
+
+    # Change the learning rate scheduler to a CyclicLR
+    # For example, base_lr = learning_rate / 10, max_lr = learning_rate
+    # step_size_up could be tuned, here we set it to 2 epochs worth of steps
+    steps_per_epoch = len(train_loader)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(
+        optimizer,
+        base_lr=learning_rate/10,
+        max_lr=learning_rate,
+        step_size_up=2 * steps_per_epoch,
+        mode='triangular2'
+    )
     
     start_epoch, start_batch_idx = load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints")
     model.to(device)
@@ -125,6 +141,9 @@ def train_model(
             )
             epoch_loss += loss
 
+            optimizer.step()
+            scheduler.step()  # update learning rate each batch
+
             # Save checkpoint every 50 batches
             if batch_idx % 50 == 0:
                 print(
@@ -149,8 +168,18 @@ def train_model(
         avg_losses = evaluator.evaluate_all(prober=prober)
         # Extract the normal validation loss
         val_loss_normal = avg_losses["normal"]
+        val_loss_wall = avg_losses["wall"]
         print(f"Validation normal loss: {val_loss_normal:.4f}")
-        print(f"Validation wall loss: {avg_losses['wall']:.4f}")
+        print(f"Validation wall loss: {val_loss_wall:.4f}")
+
+        # Log metrics to WandB
+        wandb.log({
+            "epoch": epoch,
+            "train_loss": avg_epoch_loss,
+            "val_loss_normal": val_loss_normal,
+            "val_loss_wall": val_loss_wall,
+            "learning_rate": optimizer.param_groups[0]['lr']
+        })
 
         model.train()
 
@@ -178,20 +207,19 @@ def train_model(
         if epoch % save_every == 0:
             save_model(model, optimizer, epoch, -1)
 
-        # Step the scheduler after each epoch
-        scheduler.step()
-
     print("Training completed.")
     return model
 
 def main():
     device = get_device()
 
+    # We will try multiple runs with different dropouts and learning rates
+    dropout_values = [0.1, 0.2]
+    learning_rates = [1e-3, 5e-4, 1e-4]
+
     batch_size = 512
     num_epochs = 10
-    learning_rate = 1e-4
     momentum = 0.99
-    dropout = 0.2
 
     mp.set_start_method('spawn', force=True)
 
@@ -224,27 +252,41 @@ def main():
         batch_size=batch_size
     )
 
-    model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
-    model.to(device)
+    for d in dropout_values:
+        for lr in learning_rates:
+            # Start a new wandb run for each configuration
+            wandb.init(project="my_jepa_project", config={
+                "dropout": d,
+                "learning_rate": lr,
+                "batch_size": batch_size,
+                "epochs": num_epochs,
+                "momentum": momentum,
+                "distance_function": "l2",
+            }, reinit=True)
 
-    trained_model = train_model(
-        device=device,
-        model=model,
-        train_loader=train_loader,
-        probe_train_ds=probe_train_ds,
-        probe_val_normal_ds=probe_val_normal_ds,
-        probe_val_wall_ds=probe_val_wall_ds,
-        num_epochs=num_epochs,
-        learning_rate=learning_rate,
-        momentum=momentum,
-        save_every=1,
-        train_sampler=train_sampler,
-        dropout=dropout
-    )
+            model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=d)
+            model.to(device)
 
-    # Save the final model
-    optimizer = optim.Adam(trained_model.parameters(), lr=learning_rate)
-    save_model(trained_model, optimizer, "final_epoch", -1)
+            trained_model = train_model(
+                device=device,
+                model=model,
+                train_loader=train_loader,
+                probe_train_ds=probe_train_ds,
+                probe_val_normal_ds=probe_val_normal_ds,
+                probe_val_wall_ds=probe_val_wall_ds,
+                num_epochs=num_epochs,
+                learning_rate=lr,
+                momentum=momentum,
+                save_every=1,
+                train_sampler=train_sampler,
+                dropout=d
+            )
+
+            # Save the final model
+            optimizer = optim.Adam(trained_model.parameters(), lr=lr)
+            save_model(trained_model, optimizer, "final_epoch", -1)
+
+            wandb.finish()
 
 if __name__ == "__main__":
     main()
