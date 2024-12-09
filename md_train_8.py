@@ -73,12 +73,15 @@ def load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints"):
 
     start_epoch = checkpoint['epoch']
     start_batch_idx = checkpoint['batch_idx']
-    if start_batch_idx != -1:
-        start_batch_idx += 1  # resume from next batch after the saved one
-    else:
-        # If it's a final checkpoint, start at next epoch from batch 0
+
+    # If batch_idx == -1, it means we saved at the end of an epoch.
+    # In that case, we start at the next epoch, batch 0.
+    if start_batch_idx == -1:
         start_epoch += 1
         start_batch_idx = 0
+    # If batch_idx != -1, we resume exactly from that batch within the same epoch.
+    # No increment of start_batch_idx here.
+
     return start_epoch, start_batch_idx
 
 def train_model(
@@ -127,6 +130,7 @@ def train_model(
         epoch_loss = 0.0
 
         for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
+            # Skip batches until we reach the start_batch_idx if we are in the start_epoch
             if batch_idx < start_batch_idx and epoch == start_epoch:
                 continue
 
@@ -139,8 +143,8 @@ def train_model(
                 optimizer=optimizer,
                 momentum=momentum,
                 distance_function=distance_function,
-                add_noise=True,     # Added noise injection parameter
-                lambda_cov=lambda_cov      # Increased covariance penalty
+                add_noise=True,
+                lambda_cov=lambda_cov
             )
             epoch_loss += loss
 
@@ -156,6 +160,9 @@ def train_model(
 
         avg_epoch_loss = epoch_loss / len(train_loader)
         print(f"Epoch [{epoch}/{num_epochs}] Average Loss: {avg_epoch_loss:.4f}")
+
+        # After finishing the resumed epoch, we reset start_batch_idx so that subsequent epochs start from batch 0
+        start_batch_idx = 0
 
         # Run evaluation using the evaluator and prober
         model.eval()
@@ -200,9 +207,6 @@ def train_model(
                 best_val_loss_normal = val_loss_normal
                 worse_count = 0
 
-        # Reset start_batch_idx for next epoch
-        start_batch_idx = 0
-
         # Save model checkpoint at the end of the epoch
         if epoch % save_every == 0:
             save_model(model, optimizer, epoch, -1)
@@ -216,7 +220,7 @@ def main():
     # We will try multiple runs with different dropouts and learning rates
     dropout_values = [0.1, 0.2]
     learning_rates = [1e-3, 5e-4, 1e-4]
-    lambda_cov = [0.1,0.5]
+    lambda_cov_values = [0.1,0.5]
 
     batch_size = 512
     num_epochs = 10
@@ -255,7 +259,7 @@ def main():
 
     for d in dropout_values:
         for lr in learning_rates:
-            for cov in lambda_cov:
+            for cov in lambda_cov_values:
                 # Start a new wandb run for each configuration
                 wandb.init(project="my_jepa_project", config={
                     "dropout": d,
@@ -264,7 +268,7 @@ def main():
                     "epochs": num_epochs,
                     "momentum": momentum,
                     "distance_function": "l2",
-                    "lamdba_cov": cov
+                    "lambda_cov": cov
                 }, reinit=True)
 
                 model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=d)
@@ -283,7 +287,7 @@ def main():
                     save_every=1,
                     train_sampler=train_sampler,
                     dropout=d,
-                    lambda_cov = cov,
+                    lambda_cov=cov,
                 )
 
                 # Save the final model
