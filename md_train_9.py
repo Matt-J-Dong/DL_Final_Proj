@@ -6,8 +6,8 @@ import os
 import glob
 import torch.multiprocessing as mp
 
-from dataset import create_wall_dataloader
-from models_md_8 import JEPA_Model
+from dataset_md import create_wall_dataloader
+from models_md_9 import JEPA_Model
 from evaluator import ProbingEvaluator
 from dotenv import load_dotenv
 import wandb
@@ -42,9 +42,9 @@ def save_model(model, optimizer, epoch, batch_idx, save_path="checkpoints"):
         os.makedirs(save_path)
     if batch_idx == -1:
         # Use a "final" suffix for end-of-epoch checkpoint
-        save_file = os.path.join(save_path, f"jepa_model_8_epoch_{epoch}_final.pth")
+        save_file = os.path.join(save_path, f"jepa_model_9_epoch_{epoch}_final.pth")
     else:
-        save_file = os.path.join(save_path, f"jepa_model_8_epoch_{epoch}_batch_{batch_idx}.pth")
+        save_file = os.path.join(save_path, f"jepa_model_9_epoch_{epoch}_batch_{batch_idx}.pth")
     torch.save({
         'epoch': epoch,
         'batch_idx': batch_idx,
@@ -57,8 +57,8 @@ def load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints"):
     if not os.path.exists(checkpoint_dir):
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
     # Include both final and batch checkpoints
-    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_8_epoch_*_batch_*.pth")) + \
-                       glob.glob(os.path.join(checkpoint_dir, "jepa_model_8_epoch_*_final.pth"))
+    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_9_epoch_*_batch_*.pth")) + \
+                       glob.glob(os.path.join(checkpoint_dir, "jepa_model_9_epoch_*_final.pth"))
     if len(checkpoint_files) == 0:
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
 
