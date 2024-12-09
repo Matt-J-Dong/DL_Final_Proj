@@ -72,8 +72,8 @@ def load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints"):
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
-    start_epoch = checkpoint['epoch']
-    start_batch_idx = checkpoint['batch_idx']
+    start_epoch = int(checkpoint['epoch'])
+    start_batch_idx = int(checkpoint['batch_idx'])
     if start_batch_idx != -1:
         start_batch_idx += 1  # resume from next batch after the saved one
     else:
