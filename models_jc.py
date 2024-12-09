@@ -136,20 +136,26 @@ class JEPA_Model(nn.Module):
 
 
     def covariance_regularization(self, states):
-        """
-        Reduces redundancy by decorrelating dimensions of embeddings.
+    """
+    Reduces redundancy by decorrelating dimensions of embeddings.
 
-        Args:
-            states: [B, D] Predicted embeddings.
+    Args:
+        states: [B, T, D] or [B, D] Predicted embeddings.
 
-        Returns:
-            Regularization loss value.
-        """
-        batch_size, dim = states.size()
-        norm_states = states - states.mean(dim=0, keepdim=True)
-        cov_matrix = (norm_states.T @ norm_states) / (batch_size - 1)
-        off_diag = cov_matrix - torch.diag(torch.diag(cov_matrix))
-        return torch.sum(off_diag ** 2)
+    Returns:
+        Regularization loss value.
+    """
+    if states.ndim == 3:  # If states is [B, T, D], merge batch and time dimensions
+        states = states.view(-1, states.size(-1))  # [B * T, D]
+    elif states.ndim != 2:
+        raise ValueError(f"Expected states to have 2 or 3 dimensions, got {states.ndim}")
+
+    batch_size, dim = states.size()
+    norm_states = states - states.mean(dim=0, keepdim=True)
+    cov_matrix = (norm_states.T @ norm_states) / (batch_size - 1)
+    off_diag = cov_matrix - torch.diag(torch.diag(cov_matrix))
+    return torch.sum(off_diag ** 2)
+
 
 
     def compute_energy(self, predicted_encs, target_encs, distance_function="l2"):
