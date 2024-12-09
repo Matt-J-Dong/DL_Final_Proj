@@ -101,7 +101,7 @@ def save_model(model, optimizer, epoch, batch, save_path="checkpoints", is_main_
     print(f"[Rank {rank}] Checkpoint saved to {save_file}")
 
 
-def load_checkpoint(model, optimizer, save_path="checkpoints", is_main_process=True, device=torch.device('cpu')):
+def load_checkpoint(model, optimizer, save_path="checkpoints", is_main_process=True, device=device):
     """
     Load the latest checkpoint from the save_path.
     Returns the starting epoch and batch. If no checkpoint is found, returns (1, 0).

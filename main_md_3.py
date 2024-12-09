@@ -55,7 +55,7 @@ def load_latest_checkpoint(model, optimizer, device, checkpoint_dir="checkpoints
     latest_checkpoint = checkpoint_files[-1]
 
     print(f"Loading from checkpoint: {latest_checkpoint}")
-    checkpoint = torch.load(latest_checkpoint, map_location='cpu')
+    checkpoint = torch.load(latest_checkpoint, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     
     # Move model to the correct device after loading

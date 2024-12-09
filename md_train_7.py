@@ -13,8 +13,9 @@ from dotenv import load_dotenv
 import wandb
 
 load_dotenv()
-WANDB_KEY = os.getenv("WANDB_KEY")
-wandb.login(key=WANDB_KEY)
+WANDB_API_KEY = os.getenv("WANDB_API_KEY")
+os.environ["WANDB_API_KEY"] = WANDB_API_KEY
+wandb.login(key=WANDB_API_KEY)
 
 def get_device():
     """Set the device for single-GPU training."""
@@ -66,7 +67,7 @@ def load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints"):
     latest_checkpoint = checkpoint_files[-1]
 
     print(f"Loading from checkpoint: {latest_checkpoint}")
-    checkpoint = torch.load(latest_checkpoint, map_location='cpu')
+    checkpoint = torch.load(latest_checkpoint, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
@@ -95,7 +96,7 @@ def train_model(
     distance_function="l2",
     dropout=0.1
 ):
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
 
     # Change the learning rate scheduler to a CyclicLR
     # For example, base_lr = learning_rate / 10, max_lr = learning_rate
@@ -283,7 +284,7 @@ def main():
             )
 
             # Save the final model
-            optimizer = optim.Adam(trained_model.parameters(), lr=lr)
+            optimizer = optim.Adam(trained_model.parameters(), lr=lr, weight_decay=1e-4)
             save_model(trained_model, optimizer, "final_epoch", -1)
 
             wandb.finish()

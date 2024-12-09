@@ -134,7 +134,7 @@ def load_checkpoint(model, optimizer, save_path="checkpoints_2gpu", is_main_proc
 
         latest_checkpoint = checkpoint_files[0]
         print(f"[Main Process] Loading checkpoint from {latest_checkpoint}")
-        checkpoint = torch.load(latest_checkpoint, map_location='cpu')  # Load on CPU first
+        checkpoint = torch.load(latest_checkpoint, map_location=device)  # Load on CPU first
 
         model_state = checkpoint.get('model_state_dict', None)
         optimizer_state = checkpoint.get('optimizer_state_dict', None)
