@@ -49,8 +49,8 @@ def load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints"):
     if not os.path.exists(checkpoint_dir):
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
     # Include both final and batch checkpoints
-    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_epoch_*_batch_*.pth")) + \
-                       glob.glob(os.path.join(checkpoint_dir, "jepa_model_epoch_*_final.pth"))
+    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_4_epoch_*_batch_*.pth")) + \
+                       glob.glob(os.path.join(checkpoint_dir, "jepa_model_4_epoch_*_final.pth"))
     if len(checkpoint_files) == 0:
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
 
