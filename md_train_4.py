@@ -7,7 +7,7 @@ import glob
 import torch.multiprocessing as mp
 
 from dataset import create_wall_dataloader
-from models import JEPA_Model
+from models_md_4 import JEPA_Model
 
 def get_device():
     """Set the device for single-GPU training."""
