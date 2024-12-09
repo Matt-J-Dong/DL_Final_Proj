@@ -3,10 +3,11 @@ import torch.nn as nn
 import torch.optim as optim
 from tqdm.auto import tqdm
 import os
-from dataset import create_wall_dataloader
-from models_md_2 import JEPA_Model
-import torch.multiprocessing as mp
 import glob
+import torch.multiprocessing as mp
+
+from dataset import create_wall_dataloader
+from models import JEPA_Model
 
 def get_device():
     """Set the device for single-GPU training."""
@@ -69,9 +70,13 @@ def train_model(
     momentum=0.99,
     save_every=1,
     train_sampler=None,
-    distance_function="l2"
+    distance_function="l2",
+    dropout=0.1
 ):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    # Create a learning rate scheduler: for example, every 5 epochs reduce LR by a factor of 0.1
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
+    
     start_epoch, start_batch_idx = load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints")
     model.to(device)
     model.train()
@@ -82,10 +87,9 @@ def train_model(
 
         epoch_loss = 0.0
 
-        # If we are resuming from the middle of an epoch, skip batches until start_batch_idx
+        # Resume training from the stored batch index if necessary
         for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
             if batch_idx < start_batch_idx and epoch == start_epoch:
-                # Just skip these batches, do not train
                 continue
 
             states = batch.states.to(device)
@@ -110,28 +114,33 @@ def train_model(
         avg_epoch_loss = epoch_loss / len(train_loader)
         print(f"Epoch [{epoch}/{num_epochs}] Average Loss: {avg_epoch_loss:.4f}")
 
-        # Reset start_batch_idx after the first resumed epoch
+        # After finishing an epoch, reset start_batch_idx
         start_batch_idx = 0
 
-        # Save model checkpoint every epoch (final state of the epoch)
+        # Save model checkpoint every epoch
         if epoch % save_every == 0:
             save_model(model, optimizer, epoch, -1)
+
+        # Step the scheduler after each epoch
+        scheduler.step()
 
     print("Training completed.")
     return model
 
 def main():
     device = get_device()
+
     batch_size = 512
     num_epochs = 10
     learning_rate = 1e-4
     momentum = 0.99
+    dropout = 0.1  # Example dropout value
 
     mp.set_start_method('spawn', force=True)
 
     train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
 
-    model = JEPA_Model(device=device, repr_dim=256, action_dim=2)
+    model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
     model.to(device)
 
     trained_model = train_model(
@@ -142,10 +151,11 @@ def main():
         learning_rate=learning_rate,
         momentum=momentum,
         save_every=1,
-        train_sampler=train_sampler
+        train_sampler=train_sampler,
+        dropout=dropout
     )
 
-    # Saving a final model checkpoint
+    # Save the final model
     optimizer = optim.Adam(trained_model.parameters(), lr=learning_rate)
     save_model(trained_model, optimizer, "final_epoch", -1)
 
