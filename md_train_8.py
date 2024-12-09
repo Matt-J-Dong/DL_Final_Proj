@@ -6,7 +6,7 @@ import os
 import glob
 import torch.multiprocessing as mp
 
-from dataset import create_wall_dataloader
+from dataset_md import create_wall_dataloader
 from models_md_8 import JEPA_Model
 from evaluator import ProbingEvaluator
 from dotenv import load_dotenv

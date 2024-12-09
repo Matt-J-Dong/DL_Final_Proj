@@ -1,0 +1,1 @@
+Model version 6 validation loss increased 2 epochs in a row. RIP model.
