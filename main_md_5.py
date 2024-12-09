@@ -49,7 +49,7 @@ def load_model(checkpoint_path="./checkpoints"):
     latest_checkpoint = checkpoint_files[-1]
     print(f"Loading model from {latest_checkpoint}")
     checkpoint = torch.load(latest_checkpoint, map_location=torch.device(device))
-    model = JEPA_Model(device="cpu", repr_dim=256, action_dim=2)
+    model = JEPA_Model(device=device, repr_dim=256, action_dim=2)
     new_state_dict = OrderedDict()
     for k, v in checkpoint['model_state_dict'].items():
         name = k[7:] if k.startswith('module.') else k
