@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 from tqdm.auto import tqdm
 import os
-from torch.utils.data import Subset, DataLoader
+from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from glob import glob
 
@@ -27,33 +27,42 @@ def get_device(local_rank):
         device = torch.device(f'cuda:{local_rank}')
     else:
         device = torch.device('cpu')
-    print(f"Process {dist.get_rank() if dist.is_initialized() else 0} using device: {device}")
+    rank = dist.get_rank() if dist.is_initialized() else 0
+    print(f"Process {rank} using device: {device}")
     return device
 
 
 def load_data(batch_size, is_distributed, device):
+    """
+    Load the training data with or without DistributedSampler based on the distributed flag.
+
+    Args:
+        batch_size (int): Number of samples per batch.
+        is_distributed (bool): Whether to use DistributedSampler.
+        device (torch.device): The device to which data tensors are moved.
+
+    Returns:
+        DataLoader: The training data loader.
+        DistributedSampler or None: The sampler used.
+    """
     data_path = "/scratch/DL24FA"
     # data_path = "./data/DL24FA"
 
-    train_sampler = DistributedSampler(
-        create_wall_dataloader(
-            data_path=f"{data_path}/train",
-            probing=False,
-            device=device,
-            train=True,
-            batch_size=batch_size,
-        ).dataset,
-        shuffle=True
-    ) if is_distributed else None
+    # Initialize the dataset
+    dataset = create_wall_dataloader(
+        data_path=f"{data_path}/train",
+        probing=False,
+        device=device,
+        train=True,
+        batch_size=batch_size,
+    ).dataset
 
+    # Initialize the sampler if distributed
+    train_sampler = DistributedSampler(dataset, shuffle=True) if is_distributed else None
+
+    # Initialize the DataLoader
     train_loader = DataLoader(
-        create_wall_dataloader(
-            data_path=f"{data_path}/train",
-            probing=False,
-            device=device,
-            train=True,
-            batch_size=batch_size,
-        ).dataset,
+        dataset,
         batch_size=batch_size,
         shuffle=(train_sampler is None),
         sampler=train_sampler,
@@ -64,41 +73,59 @@ def load_data(batch_size, is_distributed, device):
     return train_loader, train_sampler
 
 
-def save_model(model, optimizer, epoch, batch, save_path="checkpoints", is_main_process=True):
+def save_model(model, optimizer, epoch, batch, save_path="checkpoints_2gpu", is_main_process=True):
     """
     Save the model and optimizer state_dicts, along with the current epoch and batch.
     Only the main process should perform saving to avoid conflicts.
+
+    Args:
+        model (nn.Module): The model to save.
+        optimizer (torch.optim.Optimizer or None): The optimizer to save.
+        epoch (int or str): Current epoch number or a string identifier.
+        batch (int or str): Current batch number or a string identifier.
+        save_path (str): Directory path to save the checkpoint.
+        is_main_process (bool): Flag indicating if the current process is the main process.
     """
     if not is_main_process:
         return
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-    save_file = os.path.join(save_path, f"jepa_model_epoch_{epoch}_batch_{batch}.pth")
+    save_file = os.path.join(save_path, f"2gpu_jepa_model_epoch_{epoch}_batch_{batch}.pth")
     checkpoint = {
         'epoch': epoch,
         'batch': batch,
         'model_state_dict': model.module.state_dict() if isinstance(model, nn.parallel.DistributedDataParallel) else model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
     }
+    if optimizer is not None:
+        checkpoint['optimizer_state_dict'] = optimizer.state_dict()
     torch.save(checkpoint, save_file)
-    print(f"[Rank {dist.get_rank()}] Checkpoint saved to {save_file}")
+    rank = dist.get_rank() if dist.is_initialized() else 0
+    print(f"[Rank {rank}] Checkpoint saved to {save_file}")
 
 
-def load_checkpoint(model, optimizer, save_path="checkpoints", is_main_process=True):
+def load_checkpoint(model, optimizer, save_path="checkpoints_2gpu", is_main_process=True):
     """
     Load the latest checkpoint from the save_path.
     Returns the starting epoch and batch. If no checkpoint is found, returns (1, 0).
-    Only the main process performs loading.
-    Other processes wait until the main process finishes loading.
+    Only the main process performs loading. Other processes wait until loading is complete.
+
+    Args:
+        model (nn.Module): The model to load the state into.
+        optimizer (torch.optim.Optimizer or None): The optimizer to load the state into.
+        save_path (str): Directory path to load the checkpoint from.
+        is_main_process (bool): Flag indicating if the current process is the main process.
+
+    Returns:
+        tuple: (start_epoch (int), start_batch (int))
     """
     if is_main_process:
-        checkpoint_files = glob(os.path.join(save_path, "jepa_model_epoch_*_batch_*.pth"))
+        checkpoint_files = glob(os.path.join(save_path, "2gpu_jepa_model_epoch_*_batch_*.pth"))
         if not checkpoint_files:
             print("[Main Process] No checkpoint found. Starting training from scratch.")
             return 1, 0  # Starting epoch and batch
 
-        # Sort checkpoints by epoch and batch
+        # Sort checkpoints by epoch and batch in descending order
         checkpoint_files.sort(key=lambda x: (
             int(x.split("_epoch_")[1].split("_")[0]),
             int(x.split("_batch_")[1].split(".pth")[0])
@@ -116,8 +143,17 @@ def load_checkpoint(model, optimizer, save_path="checkpoints", is_main_process=T
         if model_state is None:
             print("[Main Process] 'model_state_dict' not found in checkpoint. Ignoring.")
             return 1, 0
-        if optimizer_state is None:
+        if optimizer_state is None and optimizer is not None:
             print("[Main Process] 'optimizer_state_dict' not found in checkpoint. Ignoring optimizer state.")
+
+        # Load model state
+        if isinstance(model, nn.parallel.DistributedDataParallel):
+            model.module.load_state_dict(model_state)
+        else:
+            model.load_state_dict(model_state)
+
+        if optimizer is not None and optimizer_state is not None:
+            optimizer.load_state_dict(optimizer_state)
 
         # Broadcast the epoch and batch to all processes
         start_epoch = epoch
@@ -128,12 +164,12 @@ def load_checkpoint(model, optimizer, save_path="checkpoints", is_main_process=T
 
     # Broadcast the start_epoch and start_batch from main process to all other processes
     if dist.is_initialized():
-        start_epoch = torch.tensor(start_epoch).to('cuda')
-        start_batch = torch.tensor(start_batch).to('cuda')
-        dist.broadcast(start_epoch, src=0)
-        dist.broadcast(start_batch, src=0)
-        start_epoch = start_epoch.item()
-        start_batch = start_batch.item()
+        start_epoch_tensor = torch.tensor(start_epoch).to(device='cuda')
+        start_batch_tensor = torch.tensor(start_batch).to(device='cuda')
+        dist.broadcast(start_epoch_tensor, src=0)
+        dist.broadcast(start_batch_tensor, src=0)
+        start_epoch = start_epoch_tensor.item()
+        start_batch = start_batch_tensor.item()
 
     return start_epoch, start_batch
 
@@ -152,24 +188,35 @@ def train_model(
     train_sampler=None,
     distance_function="l2"  # Specify the distance function for the energy loss
 ):
-    # Initialize the process group
-    dist.init_process_group(
-        backend='nccl',
-        init_method='env://',
-        world_size=world_size,
-        rank=local_rank
-    )
+    """
+    Train the model using DistributedDataParallel.
 
-    # Move model to device and wrap with DDP
+    Args:
+        local_rank (int): The local rank of the process.
+        world_size (int): Total number of processes.
+        device (torch.device): The device to train on.
+        model (nn.Module): The model to train.
+        train_loader (DataLoader): The training data loader.
+        num_epochs (int): Number of epochs to train.
+        learning_rate (float): Learning rate for the optimizer.
+        momentum (float): Momentum for the optimizer.
+        save_every (int): Save checkpoint every 'save_every' epochs.
+        save_every_batch (int): Save checkpoint every 'save_every_batch' batches.
+        train_sampler (DistributedSampler or None): The sampler for the training data.
+        distance_function (str): The distance function to use for loss computation.
+    """
+    # Wrap the model with DDP
     model.to(device)
     model = nn.parallel.DistributedDataParallel(model, device_ids=[local_rank] if torch.cuda.is_available() else None)
 
     # Initialize the optimizer
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    # Attempt to load from the latest checkpoint
+    # Determine if the current process is the main process
     is_main_process = dist.get_rank() == 0
-    start_epoch, start_batch = load_checkpoint(model, optimizer, save_path="checkpoints", is_main_process=is_main_process)
+
+    # Attempt to load from the latest checkpoint
+    start_epoch, start_batch = load_checkpoint(model, optimizer, save_path="checkpoints_2gpu", is_main_process=is_main_process)
 
     # Ensure all processes start from the same epoch and batch
     dist.barrier()
@@ -220,7 +267,7 @@ def train_model(
                 print(
                     f"Epoch [{epoch}/{num_epochs}], Batch [{global_batch_idx}/{len(train_loader)}], Loss: {loss:.4f}"
                 )
-                save_model(model, optimizer, epoch, global_batch_idx, save_path="checkpoints", is_main_process=True)
+                save_model(model, optimizer, epoch, global_batch_idx, save_path="checkpoints_2gpu", is_main_process=True)
 
         # Average loss across all batches
         avg_epoch_loss = epoch_loss / len(train_loader)
@@ -229,7 +276,7 @@ def train_model(
 
         # Save model checkpoint at the end of the epoch
         if is_main_process and epoch % save_every == 0:
-            save_model(model, optimizer, epoch, global_batch_idx, save_path="checkpoints", is_main_process=True)
+            save_model(model, optimizer, epoch, global_batch_idx, save_path="checkpoints_2gpu", is_main_process=True)
 
     if is_main_process:
         print("Training completed.")
@@ -243,20 +290,28 @@ def train_model(
 def main_worker(local_rank, world_size, args):
     """
     Main worker function for each process.
+
+    Args:
+        local_rank (int): The local rank of the process.
+        world_size (int): Total number of processes.
+        args (dict): Dictionary of training arguments.
     """
+    # Initialize the process group if using distributed training
+    if world_size > 1:
+        dist.init_process_group(
+            backend='nccl',
+            init_method='env://',
+            world_size=world_size,
+            rank=local_rank
+        )
+
     # Set device for this process
     device = get_device(local_rank)
-
-    # Initialize distributed environment if necessary
-    is_distributed = world_size > 1
-    if is_distributed:
-        # Environment variables for torch.distributed are expected to be set externally
-        pass  # Initialization is handled in train_model
 
     # Load data with DistributedSampler if distributed
     train_loader, train_sampler = load_data(
         batch_size=args['batch_size'],
-        is_distributed=is_distributed,
+        is_distributed=(world_size > 1),
         device=device
     )
 
@@ -288,10 +343,14 @@ def main_worker(local_rank, world_size, args):
     if is_main_process:
         # Detach the model from DDP before saving
         final_model = trained_model.module if isinstance(trained_model, nn.parallel.DistributedDataParallel) else trained_model
-        save_model(final_model, optimizer=None, epoch="final", batch="final", save_path="checkpoints", is_main_process=True)
+        save_model(final_model, optimizer=None, epoch="final", batch="final", save_path="checkpoints_2gpu", is_main_process=True)
 
 
 def main():
+    """
+    Entry point for the training script.
+    Determines whether to use distributed training based on available GPUs and launches training accordingly.
+    """
     # Hyperparameters and configurations
     args = {
         'batch_size': 512,
