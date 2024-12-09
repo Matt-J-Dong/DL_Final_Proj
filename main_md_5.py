@@ -46,7 +46,7 @@ def save_model(model, optimizer, epoch, batch_idx, save_path="checkpoints"):
 def load_latest_checkpoint(model, optimizer, device, checkpoint_dir="checkpoints"):
     if not os.path.exists(checkpoint_dir):
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
-    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_3_epoch_*_batch_*.pth"))
+    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_5_epoch_*_batch_*.pth"))
     if len(checkpoint_files) == 0:
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
 
