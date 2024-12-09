@@ -283,7 +283,7 @@ def main():
                     save_every=1,
                     train_sampler=train_sampler,
                     dropout=d,
-                    lambda_cov = lambda_cov,
+                    lambda_cov = cov,
                 )
 
                 # Save the final model
