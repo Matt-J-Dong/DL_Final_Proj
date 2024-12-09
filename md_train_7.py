@@ -223,7 +223,7 @@ def main():
     num_epochs = 10
     momentum = 0.99
 
-    mp.set_start_method('spawn', force=True)
+    #mp.set_start_method('spawn', force=True)
 
     # Load main training data
     train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
@@ -284,9 +284,9 @@ def main():
                 dropout=d
             )
 
-            # Save the final model
+            # Save the final model using the actual epoch number, not a string
             optimizer = optim.Adam(trained_model.parameters(), lr=lr, weight_decay=1e-4)
-            save_model(trained_model, optimizer, "final_epoch", -1)
+            save_model(trained_model, optimizer, num_epochs, -1)  # Use num_epochs instead of "final_epoch"
 
             wandb.finish()
 
