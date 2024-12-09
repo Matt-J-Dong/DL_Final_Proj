@@ -39,10 +39,10 @@ def load_data(device):
 
     return probe_train_ds, probe_val_ds
 
-def load_model(checkpoint_path="./checkpoints"):
+def load_model(checkpoint_path="./checkpoints_wandb"):
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError("No checkpoint directory found.")
-    checkpoint_files = glob.glob(os.path.join(checkpoint_path, "jepa_model_8_epoch_*_batch_*.pth"))
+    checkpoint_files = glob.glob(os.path.join(checkpoint_path, "jepa_model_9_epoch_*_batch_*.pth"))
     if len(checkpoint_files) == 0:
         raise FileNotFoundError("No checkpoint found in the directory.")
     checkpoint_files.sort(key=os.path.getmtime)
@@ -74,5 +74,5 @@ def evaluate_model(device, model, probe_train_ds, probe_val_ds):
 if __name__ == "__main__":
     device = get_device()
     probe_train_ds, probe_val_ds = load_data(device)
-    model = load_model("./checkpoints")
+    model = load_model("./checkpoints_wandb")
     evaluate_model(device, model, probe_train_ds, probe_val_ds)

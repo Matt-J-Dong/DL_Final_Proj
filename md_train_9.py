@@ -6,7 +6,7 @@ import os
 import glob
 import torch.multiprocessing as mp
 
-from dataset_md import create_wall_dataloader
+from dataset import create_wall_dataloader
 from models_md_9 import JEPA_Model
 from evaluator import ProbingEvaluator
 from dotenv import load_dotenv
@@ -37,14 +37,23 @@ def load_data(device, batch_size=64, is_distributed=False, subset_size=1000):
     )
     return train_loader, None
 
-def save_model(model, optimizer, epoch, batch_idx, save_path="checkpoints"):
+def save_model(model, optimizer, epoch, batch_idx, learning_rate, dropout, lambda_cov, save_path="checkpoints_wandb"):
     if not os.path.exists(save_path):
         os.makedirs(save_path)
+
+    # Create a filename that includes all hyperparameters and checkpoint details
     if batch_idx == -1:
         # Use a "final" suffix for end-of-epoch checkpoint
-        save_file = os.path.join(save_path, f"jepa_model_9_epoch_{epoch}_final.pth")
+        save_file = os.path.join(
+            save_path,
+            f"jepa_model_9_epoch_{epoch}_final_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}.pth"
+        )
     else:
-        save_file = os.path.join(save_path, f"jepa_model_9_epoch_{epoch}_batch_{batch_idx}.pth")
+        save_file = os.path.join(
+            save_path,
+            f"jepa_model_9_epoch_{epoch}_batch_{batch_idx}_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}.pth"
+        )
+
     torch.save({
         'epoch': epoch,
         'batch_idx': batch_idx,
@@ -53,13 +62,14 @@ def save_model(model, optimizer, epoch, batch_idx, save_path="checkpoints"):
     }, save_file)
     print(f"Model saved to {save_file}")
 
-def load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints"):
+def load_latest_checkpoint(model, optimizer, learning_rate, dropout, lambda_cov, checkpoint_dir="checkpoints_wandb"):
     device = get_device()
     if not os.path.exists(checkpoint_dir):
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
-    # Include both final and batch checkpoints
-    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_9_epoch_*_batch_*.pth")) + \
-                       glob.glob(os.path.join(checkpoint_dir, "jepa_model_9_epoch_*_final.pth"))
+    
+    # Include both final and batch checkpoints that match the hyperparameters
+    pattern = f"jepa_model_9_epoch_*_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}.pth"
+    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, pattern))
     if len(checkpoint_files) == 0:
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
 
@@ -111,7 +121,7 @@ def train_model(
         mode='triangular2'
     )
     
-    start_epoch, start_batch_idx = load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints")
+    start_epoch, start_batch_idx = load_latest_checkpoint(model, optimizer, learning_rate, dropout, lambda_cov, checkpoint_dir="checkpoints_wandb")
     model.to(device)
     model.train()
 
@@ -140,8 +150,8 @@ def train_model(
                 optimizer=optimizer,
                 momentum=momentum,
                 distance_function=distance_function,
-                add_noise=True,     # Added noise injection parameter
-                lambda_cov=lambda_cov      # Increased covariance penalty
+                add_noise=True,
+                lambda_cov=lambda_cov
             )
             epoch_loss += loss
 
@@ -153,7 +163,7 @@ def train_model(
                 print(
                     f"Epoch [{epoch}/{num_epochs}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}"
                 )
-                save_model(model, optimizer, epoch, batch_idx)
+                save_model(model, optimizer, epoch, batch_idx, learning_rate, dropout, lambda_cov)
 
         avg_epoch_loss = epoch_loss / len(train_loader)
         print(f"Epoch [{epoch}/{num_epochs}] Average Loss: {avg_epoch_loss:.4f}")
@@ -206,7 +216,7 @@ def train_model(
 
         # Save model checkpoint at the end of the epoch
         if epoch % save_every == 0:
-            save_model(model, optimizer, epoch, -1)
+            save_model(model, optimizer, epoch, -1, learning_rate, dropout, lambda_cov)
 
     print("Training completed.")
     return model
@@ -217,12 +227,13 @@ def main():
     # We will try multiple runs with different dropouts and learning rates
     dropout_values = [0.1, 0.2]
     learning_rates = [1e-3, 5e-4, 1e-4]
-    lambda_cov = [0.1,0.5]
+    lambda_cov_values = [0.1,0.5]
 
     batch_size = 512
     num_epochs = 10
     momentum = 0.99
 
+    # Remove mp.set_start_method if unnecessary, otherwise set_start_method('spawn') if needed.
     #mp.set_start_method('spawn', force=True)
 
     # Load main training data
@@ -256,7 +267,7 @@ def main():
 
     for d in dropout_values:
         for lr in learning_rates:
-            for cov in lambda_cov:
+            for cov in lambda_cov_values:
                 # Start a new wandb run for each configuration
                 wandb.init(project="my_jepa_project", config={
                     "dropout": d,
@@ -265,7 +276,7 @@ def main():
                     "epochs": num_epochs,
                     "momentum": momentum,
                     "distance_function": "l2",
-                    "lamdba_cov": cov
+                    "lambda_cov": cov
                 }, reinit=True)
 
                 model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=d)
@@ -284,12 +295,12 @@ def main():
                     save_every=1,
                     train_sampler=train_sampler,
                     dropout=d,
-                    lambda_cov = cov,
+                    lambda_cov=cov,
                 )
 
-                # Save the final model
+                # Save the final model using the actual epoch number, not a string
                 optimizer = optim.Adam(trained_model.parameters(), lr=lr, weight_decay=1e-4)
-                save_model(trained_model, optimizer, num_epochs, -1)  # Use num_epochs instead of "final_epoch"
+                save_model(trained_model, optimizer, num_epochs, -1, lr, d, cov)
 
                 wandb.finish()
 
