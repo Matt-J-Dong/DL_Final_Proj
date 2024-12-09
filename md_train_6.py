@@ -87,7 +87,7 @@ def train_model(
     save_every=1,
     train_sampler=None,
     distance_function="l2",
-    dropout=0.1
+    dropout=0.2
 ):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     # Example scheduler: reduce LR by 0.1 every 5 epochs
@@ -172,7 +172,7 @@ def main():
     num_epochs = 10
     learning_rate = 1e-4
     momentum = 0.99
-    dropout = 0.1
+    dropout = 0.2
 
     mp.set_start_method('spawn', force=True)
 
