@@ -34,9 +34,9 @@ def save_model(model, optimizer, epoch, batch_idx, save_path="checkpoints"):
         os.makedirs(save_path)
     if batch_idx == -1:
         # Use a "final" suffix for end-of-epoch checkpoint
-        save_file = os.path.join(save_path, f"jepa_model_epoch_{epoch}_final.pth")
+        save_file = os.path.join(save_path, f"jepa_model_4_epoch_{epoch}_final.pth")
     else:
-        save_file = os.path.join(save_path, f"jepa_model_epoch_{epoch}_batch_{batch_idx}.pth")
+        save_file = os.path.join(save_path, f"jepa_model_4_epoch_{epoch}_batch_{batch_idx}.pth")
     torch.save({
         'epoch': epoch,
         'batch_idx': batch_idx,
