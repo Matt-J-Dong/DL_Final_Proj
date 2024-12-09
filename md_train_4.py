@@ -5,9 +5,8 @@ from tqdm.auto import tqdm
 import os
 import glob
 import torch.multiprocessing as mp
-import re
 
-from dataset_md import create_wall_dataloader
+from dataset import create_wall_dataloader
 from models_md_4 import JEPA_Model
 
 def get_device():
@@ -35,9 +34,9 @@ def save_model(model, optimizer, epoch, batch_idx, save_path="checkpoints"):
         os.makedirs(save_path)
     if batch_idx == -1:
         # Use a "final" suffix for end-of-epoch checkpoint
-        save_file = os.path.join(save_path, f"jepa_model_4_epoch_{epoch}_final.pth")
+        save_file = os.path.join(save_path, f"jepa_model_epoch_{epoch}_final.pth")
     else:
-        save_file = os.path.join(save_path, f"jepa_model_4_epoch_{epoch}_batch_{batch_idx}.pth")
+        save_file = os.path.join(save_path, f"jepa_model_epoch_{epoch}_batch_{batch_idx}.pth")
     torch.save({
         'epoch': epoch,
         'batch_idx': batch_idx,
@@ -46,45 +45,18 @@ def save_model(model, optimizer, epoch, batch_idx, save_path="checkpoints"):
     }, save_file)
     print(f"Model saved to {save_file}")
 
-def parse_checkpoint_filename(fname):
-    # Matches strings like: jepa_model_4_epoch_3_batch_150.pth or jepa_model_4_epoch_3_final.pth
-    # We want to extract (epoch, batch_idx or final)
-    basename = os.path.basename(fname)
-    final_match = re.match(r'^jepa_model_4_epoch_(\d+)_final\.pth$', basename)
-    if final_match:
-        epoch = int(final_match.group(1))
-        batch_idx = float('inf')  # Treat final as infinity so it's considered after all batches
-        return epoch, batch_idx, True
-    
-    match = re.match(r'^jepa_model_4_epoch_(\d+)_batch_(\d+)\.pth$', basename)
-    if match:
-        epoch = int(match.group(1))
-        batch_idx = int(match.group(2))
-        return epoch, batch_idx, False
-    
-    return None, None, None
-
 def load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints"):
     if not os.path.exists(checkpoint_dir):
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
     # Include both final and batch checkpoints
-    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_4_epoch_*_batch_*.pth")) + \
-                       glob.glob(os.path.join(checkpoint_dir, "jepa_model_4_epoch_*_final.pth"))
+    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_epoch_*_batch_*.pth")) + \
+                       glob.glob(os.path.join(checkpoint_dir, "jepa_model_epoch_*_final.pth"))
     if len(checkpoint_files) == 0:
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
 
-    # Parse filenames to sort by epoch and batch
-    parsed_checkpoints = []
-    for ckpt in checkpoint_files:
-        epoch, batch_idx, is_final = parse_checkpoint_filename(ckpt)
-        if epoch is not None:
-            parsed_checkpoints.append((epoch, batch_idx, is_final, ckpt))
-
-    # Sort by epoch, then by batch_idx (with final == infinity), so final comes last if same epoch
-    parsed_checkpoints.sort(key=lambda x: (x[0], x[1]))
-
-    # The last one in the sorted list is the "latest"
-    latest_epoch, latest_batch_idx, latest_is_final, latest_checkpoint = parsed_checkpoints[-1]
+    # Sort by modification time and load the latest
+    checkpoint_files.sort(key=os.path.getmtime)
+    latest_checkpoint = checkpoint_files[-1]
 
     print(f"Loading from checkpoint: {latest_checkpoint}")
     checkpoint = torch.load(latest_checkpoint, map_location='cpu')
@@ -148,10 +120,8 @@ def train_model(
     # Example scheduler: reduce LR by 0.1 every 5 epochs
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
     
-    # Load checkpoint before sending model to device, then send to device
     start_epoch, start_batch_idx = load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints")
     model.to(device)
-
     model.train()
 
     for epoch in range(start_epoch, num_epochs + 1):
@@ -161,7 +131,7 @@ def train_model(
         epoch_loss = 0.0
 
         for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
-            if epoch == start_epoch and batch_idx < start_batch_idx:
+            if batch_idx < start_batch_idx and epoch == start_epoch:
                 continue
 
             states = batch.states.to(device)
@@ -239,8 +209,8 @@ def main():
     )
 
     model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
-    
-    # Training (with checkpoint loading)
+    model.to(device)
+
     trained_model = train_model(
         device=device,
         model=model,
