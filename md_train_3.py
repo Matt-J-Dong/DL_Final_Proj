@@ -32,7 +32,7 @@ def load_data(device, batch_size=64, is_distributed=False, subset_size=1000):
 def save_model(model, optimizer, epoch, batch_idx, save_path="checkpoints"):
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-    save_file = os.path.join(save_path, f"jepa_model_epoch_{epoch}_batch_{batch_idx}.pth")
+    save_file = os.path.join(save_path, f"jepa_model_3_epoch_{epoch}_batch_{batch_idx}.pth")
     torch.save({
         'epoch': epoch,
         'batch_idx': batch_idx,
@@ -44,7 +44,7 @@ def save_model(model, optimizer, epoch, batch_idx, save_path="checkpoints"):
 def load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints"):
     if not os.path.exists(checkpoint_dir):
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
-    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_epoch_*_batch_*.pth"))
+    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "jepa_model_3_epoch_*_batch_*.pth"))
     if len(checkpoint_files) == 0:
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
 
