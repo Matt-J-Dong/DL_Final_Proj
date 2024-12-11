@@ -96,6 +96,7 @@ def train_model(
     model.train()
 
     for epoch in range(1, num_epochs + 1):
+        print(f"Epoch {epoch}, Learning Rate: {optimizer.param_groups[0]['lr']:.6f}")
         epoch_loss = 0.0
 
         for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
