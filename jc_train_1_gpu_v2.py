@@ -7,6 +7,8 @@ from torch.utils.data import random_split, DataLoader
 from dataset import create_wall_dataloader
 from models_jc import JEPA_Model
 import torch.multiprocessing as mp
+from torch.optim.lr_scheduler import CosineAnnealingLR
+
 
 def get_device():
     """Set the device for single-GPU training."""
