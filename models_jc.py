@@ -97,17 +97,7 @@ class JEPA_Model(nn.Module):
         pred_encs = torch.stack(pred_encs, dim=1)
         return pred_encs
 
-    def variance_regularization(self, states, epsilon=1e-4):
-        """
-        Prevents representation collapse by enforcing variance in each embedding dimension.
-
-        Args:
-            states: [B, D] or [B, T, D] Predicted embeddings.
-            epsilon: Small positive constant to stabilize variance calculation.
-
-        Returns:
-            Regularization loss value.
-        """
+    def variance_regularization(self, states, epsilon=1e-3):
         if states.ndim == 3:  # [B, T, D]
             states = states.view(-1, states.size(-1))  # Flatten to [B*T, D]
         
@@ -115,37 +105,32 @@ class JEPA_Model(nn.Module):
         std_x = torch.sqrt(states.var(dim=0, unbiased=False) + epsilon)
         
         # Penalize dimensions with standard deviation below 1.0
-        variance_loss = torch.mean(torch.relu(1.0 - std_x))
+        variance_loss = torch.mean(torch.relu(1.0 - std_x) ** 2)  # Penalize proportional to deviation
         
         return variance_loss
 
 
+
     def covariance_regularization(self, states):
-        """
-        Reduces redundancy by decorrelating dimensions of embeddings.
-
-        Args:
-            states: [B, D] or [B, T, D] Predicted embeddings.
-
-        Returns:
-            Regularization loss value.
-        """
         if states.ndim == 3:  # [B, T, D]
             states = states.view(-1, states.size(-1))  # Flatten to [B*T, D]
         
         batch_size, dim = states.size()
         
-        # Center the embeddings
-        states = states - states.mean(dim=0, keepdim=True)
+        # Center and normalize the embeddings
+        states = states - states.mean(dim=0, keepdim=True)  # Center embeddings
+        states = nn.functional.normalize(states, dim=0)  # Normalize across the batch
         
         # Compute the covariance matrix
         cov_matrix = (states.T @ states) / (batch_size - 1)
         
-        # Extract off-diagonal elements
+        # Remove diagonal and penalize off-diagonal elements
         cov_loss = cov_matrix - torch.diag(torch.diag(cov_matrix))  # Remove diagonal
-        cov_loss = (cov_loss ** 2).sum() / dim  # Penalize off-diagonal elements
+        num_off_diag = dim * (dim - 1)
+        cov_loss = (cov_loss ** 2).sum() / num_off_diag  # Normalize by number of off-diagonal elements
         
         return cov_loss
+
 
 
     def compute_energy(self, predicted_encs, target_encs, distance_function="l2"):
