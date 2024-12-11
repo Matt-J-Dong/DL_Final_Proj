@@ -193,8 +193,8 @@ class JEPA_Model(nn.Module):
         target_encs = torch.stack(target_encs, dim=1)
 
         # Compute the loss function
-        lambda_var, lambda_cov = 1.0, 0.05  # Tunable hyperparameters
-        loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_var, lambda_cov)
+        lambda_energy, lambda_var, lambda_cov = 6.25, 6.25, 0.25  # Tunable hyperparameters
+        loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov)
 
 
         # Backpropagation
@@ -213,12 +213,12 @@ class JEPA_Model(nn.Module):
 
         return loss.item()
     
-    def compute_loss(self, pred_encs, target_encs, distance_function="l2", lambda_var=1.0, lambda_cov=1.0, debug=False):
+    def compute_loss(self, pred_encs, target_encs, distance_function="l2", lambda_energy=1.0, lambda_var=1.0, lambda_cov=1.0, debug=False):
         """
         Compute the loss function.
         """
         # Compute the energy function (distance between predicted and target states)
-        energy = self.compute_energy(pred_encs, target_encs, distance_function)
+        energy = lambda_energy * self.compute_energy(pred_encs, target_encs, distance_function)
 
         # Add regularization terms
         var = lambda_var * self.variance_regularization(pred_encs)
