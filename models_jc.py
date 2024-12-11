@@ -146,9 +146,8 @@ class JEPA_Model(nn.Module):
         
         batch_size, dim = states.size()
         
-        # Center and normalize the embeddings
+        # Center the embeddings
         states = states - states.mean(dim=0, keepdim=True)  # Center embeddings
-        states = nn.functional.normalize(states, dim=0)  # Normalize across the batch
         
         # Compute the covariance matrix
         cov_matrix = (states.T @ states) / (batch_size - 1)
@@ -159,6 +158,7 @@ class JEPA_Model(nn.Module):
         cov_loss = (cov_loss ** 2).sum() / num_off_diag  # Normalize by number of off-diagonal elements
         
         return cov_loss
+
 
 
 
