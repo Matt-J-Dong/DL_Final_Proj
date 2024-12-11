@@ -70,6 +70,7 @@ def train_model(
     distance_function="l2"
 ):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs)
     model.train()
 
     for epoch in range(1, num_epochs + 1):
@@ -101,12 +102,16 @@ def train_model(
         avg_epoch_loss = epoch_loss / len(train_loader)
         print(f"Epoch [{epoch}/{num_epochs}] Average Loss: {avg_epoch_loss:.4f}")
 
+        # Step the scheduler at the end of each epoch
+        scheduler.step()
+
         if epoch % save_every == 0:
             save_model(model, epoch)
             validate_model(model, val_loader, device, distance_function)
 
     print("Training completed.")
     return model
+
 
 def main():
     device = get_device()
