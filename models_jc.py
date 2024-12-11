@@ -18,8 +18,8 @@ def build_mlp(layers_dims: List[int]):
 class Encoder(nn.Module):
     def __init__(self, output_dim=256, input_channels=2, dropout_prob=0.1):
         super(Encoder, self).__init__()
-        # Load ResNet-50 without pretrained weights
-        resnet = resnet50(pretrained=False)
+        # Load ResNet-18 without pretrained weights
+        resnet = resnet18(pretrained=False)
 
         # Modify the first convolutional layer to accept the required input channels
         resnet.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
@@ -193,7 +193,7 @@ class JEPA_Model(nn.Module):
         target_encs = torch.stack(target_encs, dim=1)
 
         # Compute the loss function
-        lambda_var, lambda_cov = 0.1, 0.1  # Tunable hyperparameters
+        lambda_var, lambda_cov = 1.0, 0.05  # Tunable hyperparameters
         loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_var, lambda_cov)
 
 
