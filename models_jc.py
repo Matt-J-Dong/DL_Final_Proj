@@ -173,13 +173,10 @@ class JEPA_Model(nn.Module):
             target_encs.append(s_target)
         target_encs = torch.stack(target_encs, dim=1)
 
-        # Compute the energy function (distance between predicted and target states)
-        loss = self.compute_energy(pred_encs, target_encs, distance_function)
+        # Compute the loss function
+        lambda_var, lambda_cov = 1.0, 1.0  # Tunable hyperparameters
+        loss = self.computer_loss(pred_encs, target_encs, distance_function, lambda_var, lambda_cov)
 
-        # Add regularization terms
-        lambda_var, lambda_cov = 0.1, 0.1  # Tunable hyperparameters
-        loss += lambda_var * self.variance_regularization(pred_encs)
-        loss += lambda_cov * self.covariance_regularization(pred_encs)
 
         # Backpropagation
         optimizer.zero_grad()
@@ -196,3 +193,15 @@ class JEPA_Model(nn.Module):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
 
         return loss.item()
+    
+    def computer_loss(self, pred_encs, target_encs, distance_function="l2", lambda_var=1.0, lambda_cov=1.0):
+        """
+        Compute the loss function.
+        """
+        # Compute the energy function (distance between predicted and target states)
+        loss = self.compute_energy(pred_encs, target_encs, distance_function)
+
+        # Add regularization terms
+        loss += lambda_var * self.variance_regularization(pred_encs)
+        loss += lambda_cov * self.covariance_regularization(pred_encs)
+        return loss
