@@ -163,6 +163,7 @@ class JEPA_Model(nn.Module):
         cov_loss = cov_matrix - torch.diag(torch.diag(cov_matrix))
         num_off_diag = dim * (dim - 1)
         cov_loss = (cov_loss ** 2).sum() / num_off_diag
+        cov_loss = torch.clamp(cov_loss, max=100.0)
         
         return cov_loss
 
