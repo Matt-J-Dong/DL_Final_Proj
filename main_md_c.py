@@ -42,14 +42,21 @@ def load_data(device):
 def load_model(checkpoint_path="./checkpoints_wandb"):
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError("No checkpoint directory found.")
-    checkpoint_files = glob.glob(os.path.join(checkpoint_path, "jepa_model_c_epoch_*_batch_*.pth"))
+
+    # Updated pattern to match the filenames from md_train_c.py
+    pattern = "jepa_model_c_epoch_*_lr_*_do_*_cov_*_probe_*.pth"
+    checkpoint_files = glob.glob(os.path.join(checkpoint_path, pattern))
     if len(checkpoint_files) == 0:
         raise FileNotFoundError("No checkpoint found in the directory.")
+
     checkpoint_files.sort(key=os.path.getmtime)
     latest_checkpoint = checkpoint_files[-1]
     print(f"Loading model from {latest_checkpoint}")
+
+    device = get_device()
     checkpoint = torch.load(latest_checkpoint, map_location=torch.device(device))
-    model = JEPA_Model(device=device, repr_dim=266, action_dim=2)
+    # Use the same representation dimension as in training (256)
+    model = JEPA_Model(device=device, repr_dim=256, action_dim=2)  
     new_state_dict = OrderedDict()
     for k, v in checkpoint['model_state_dict'].items():
         name = k[7:] if k.startswith('module.') else k
