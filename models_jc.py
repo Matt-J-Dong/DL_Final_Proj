@@ -40,7 +40,7 @@ class Encoder(nn.Module):
 
 
 class Predictor(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=512, dropout_prob=0.1):
+    def __init__(self, input_dim, output_dim, hidden_dim=1024, dropout_prob=0.1):
         super(Predictor, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.bn1 = nn.BatchNorm1d(hidden_dim)
@@ -59,14 +59,42 @@ class Predictor(nn.Module):
         x = self.fc2(x)
         return x + res
 
+class Expander(nn.Module):
+    def __init__(self, input_dim=256, hidden_dim=1024, output_dim=256, dropout_prob=0.1):
+        super(Expander, self).__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.bn1 = nn.BatchNorm1d(hidden_dim)
+        self.relu1 = nn.ReLU()
+        self.dropout1 = nn.Dropout(p=dropout_prob)
+        
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+        self.bn2 = nn.BatchNorm1d(output_dim)
+        self.relu2 = nn.ReLU()
+        self.dropout2 = nn.Dropout(p=dropout_prob)
 
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.bn1(x)
+        x = self.relu1(x)
+        x = self.dropout1(x)
+
+        x = self.fc2(x)
+        x = self.bn2(x)
+        x = self.relu2(x)
+        x = self.dropout2(x)
+        return x
 
 class JEPA_Model(nn.Module):
     def __init__(self, device="cuda", repr_dim=256, action_dim=2, dropout_prob=0.1):
         super(JEPA_Model, self).__init__()
         self.device = device
         self.encoder = Encoder(output_dim=repr_dim, input_channels=2, dropout_prob=dropout_prob).to(device)
-        self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
+        
+        # Add the expander after the encoder
+        self.expander = Expander(input_dim=repr_dim, hidden_dim=1024, output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
+        
+        self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim, hidden_dim=1024, dropout_prob=dropout_prob).to(device)
+        
         self.target_encoder = Encoder(output_dim=repr_dim, input_channels=2).to(device)
         self.target_encoder.load_state_dict(self.encoder.state_dict())
         for param in self.target_encoder.parameters():
@@ -86,6 +114,7 @@ class JEPA_Model(nn.Module):
         pred_encs = []
 
         s_prev = self.encoder(init_state)
+        s_prev = self.expander(s_prev)  # Pass encoder output through expander
         pred_encs.append(s_prev)
 
         for t in range(T_minus_one):
