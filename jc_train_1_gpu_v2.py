@@ -53,6 +53,9 @@ def validate_model(model, val_loader, device, distance_function="l2"):
     """
     model.eval()
     val_loss = 0.0
+    var_culm = 0.0
+    cov_culm = 0.0
+
     with torch.no_grad():
         for batch in tqdm(val_loader, desc="Validating", leave=False):  # Minimize display overhead
             states = batch.states.to(device)
@@ -76,8 +79,13 @@ def validate_model(model, val_loader, device, distance_function="l2"):
             target_encs = torch.stack(target_encs, dim=1)
 
             # Compute loss for the sampled subset
-            loss = model.compute_loss(predicted_encs, target_encs, distance_function)
+            loss, _, var, cov = model.compute_loss(predicted_encs, target_encs, distance_function, debug=True)
             val_loss += loss.item()
+            var_culm += var
+            cov_culm += cov
+
+    print(f"Validation Variance: {var_culm / len(val_loader)}, (as percentage of loss: {var_culm / val_loss})")
+    print(f"Validation Covariance: {cov_culm / len(val_loader)}, (as percentage of loss: {cov_culm / val_loss})")
     return val_loss / len(val_loader)
 
 def train_model(
@@ -143,8 +151,8 @@ def main():
     device = get_device()
     batch_size = 512
     num_epochs = 10
-    learning_rate = 1e-4
-    momentum = 0.99
+    learning_rate = 1e-5
+    momentum = 0.9
     split_ratio = 0.9
 
     mp.set_start_method('spawn')

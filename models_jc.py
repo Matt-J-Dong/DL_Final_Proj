@@ -1,7 +1,7 @@
 from typing import List
 import torch
 import torch.nn as nn
-from torchvision.models import resnet18
+from torchvision.models import resnet18, resnet50
 
 
 def build_mlp(layers_dims: List[int]):
@@ -16,10 +16,10 @@ def build_mlp(layers_dims: List[int]):
 
 
 class Encoder(nn.Module):
-    def __init__(self, output_dim=256, input_channels=2):
+    def __init__(self, output_dim=256, input_channels=2, dropout_prob=0.1):
         super(Encoder, self).__init__()
-        # Load ResNet-18 without pretrained weights
-        resnet = resnet18(pretrained=False)
+        # Load ResNet-50 without pretrained weights
+        resnet = resnet50(pretrained=False)
 
         # Modify the first convolutional layer to accept the required input channels
         resnet.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
@@ -28,21 +28,24 @@ class Encoder(nn.Module):
         self.features = nn.Sequential(*list(resnet.children())[:-2])  # Exclude avgpool and fc
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))  # Global average pooling
         self.fc = nn.Linear(resnet.fc.in_features, output_dim)  # Replace with custom FC layer
+        self.dropout = nn.Dropout(p=dropout_prob)  # Add dropout for regularization
 
     def forward(self, x):
         x = self.features(x)  # Extract features
         x = self.avgpool(x)  # Global average pooling
         x = torch.flatten(x, 1)  # Flatten to 1D
         x = self.fc(x)  # Fully connected layer for output
+        x = self.dropout(x)  # Apply dropout
         return x
 
 
 class Predictor(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=512):
+    def __init__(self, input_dim, output_dim, hidden_dim=512, dropout_prob=0.1):
         super(Predictor, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.bn1 = nn.BatchNorm1d(hidden_dim)
         self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(p=dropout_prob)  # Add dropout layer
         self.fc2 = nn.Linear(hidden_dim, output_dim)
         self.residual = nn.Linear(input_dim, output_dim)  # Residual connection
 
@@ -52,18 +55,18 @@ class Predictor(nn.Module):
         x = self.fc1(x)
         x = self.bn1(x)
         x = self.relu(x)
+        x = self.dropout(x)  # Apply dropout after ReLU
         x = self.fc2(x)
         return x + res
 
 
+
 class JEPA_Model(nn.Module):
-    def __init__(self, device="cuda", repr_dim=256, action_dim=2):
+    def __init__(self, device="cuda", repr_dim=256, action_dim=2, dropout_prob=0.1):
         super(JEPA_Model, self).__init__()
         self.device = device
-        self.repr_dim = repr_dim
-        self.action_dim = action_dim
-        self.encoder = Encoder(output_dim=repr_dim, input_channels=2).to(device)
-        self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim).to(device)
+        self.encoder = Encoder(output_dim=repr_dim, input_channels=2, dropout_prob=dropout_prob).to(device)
+        self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
         self.target_encoder = Encoder(output_dim=repr_dim, input_channels=2).to(device)
         self.target_encoder.load_state_dict(self.encoder.state_dict())
         for param in self.target_encoder.parameters():
@@ -174,7 +177,7 @@ class JEPA_Model(nn.Module):
         target_encs = torch.stack(target_encs, dim=1)
 
         # Compute the loss function
-        lambda_var, lambda_cov = 1.0, 1.0  # Tunable hyperparameters
+        lambda_var, lambda_cov = 0.1, 0.1  # Tunable hyperparameters
         loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_var, lambda_cov)
 
 
@@ -182,7 +185,7 @@ class JEPA_Model(nn.Module):
         optimizer.zero_grad()
         loss.backward()
 
-        max_grad_norm = 1.0  # Set the maximum norm for gradients
+        max_grad_norm = 0.5  # Set the maximum norm for gradients
         torch.nn.utils.clip_grad_norm_(self.parameters(), max_grad_norm)
 
         optimizer.step()
@@ -194,14 +197,15 @@ class JEPA_Model(nn.Module):
 
         return loss.item()
     
-    def compute_loss(self, pred_encs, target_encs, distance_function="l2", lambda_var=1.0, lambda_cov=1.0):
+    def compute_loss(self, pred_encs, target_encs, distance_function="l2", lambda_var=1.0, lambda_cov=1.0, debug=False):
         """
         Compute the loss function.
         """
         # Compute the energy function (distance between predicted and target states)
-        loss = self.compute_energy(pred_encs, target_encs, distance_function)
+        energy = self.compute_energy(pred_encs, target_encs, distance_function)
 
         # Add regularization terms
-        loss += lambda_var * self.variance_regularization(pred_encs)
-        loss += lambda_cov * self.covariance_regularization(pred_encs)
-        return loss
+        var = lambda_var * self.variance_regularization(pred_encs)
+        cov = lambda_cov * self.covariance_regularization(pred_encs)
+        loss = energy + var + cov
+        return loss if not debug else (loss, energy, var, cov)
