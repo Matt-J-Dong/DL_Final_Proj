@@ -4,9 +4,17 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import CyclicLR
 from tqdm.auto import tqdm
 import os
+import wandb
 
 from dataset import create_wall_dataloader
-from models_md_d import JEPA_Model
+from models_md_e import JEPA_Model
+from evaluator_lstm import ProbingEvaluator, ProbingConfig
+from dotenv import load_dotenv
+
+load_dotenv()
+WANDB_API_KEY = os.getenv("WANDB_API_KEY")
+os.environ["WANDB_API_KEY"] = WANDB_API_KEY
+wandb.login(key=WANDB_API_KEY)
 
 def get_device():
     if torch.cuda.is_available():
@@ -14,25 +22,28 @@ def get_device():
     return torch.device('cpu')
 
 def main():
+    wandb.init(project="jepa_sweep_2")  # Initialize W&B run
     device = get_device()
 
-    # Hyperparameters
-    batch_size = 64
-    num_epochs = 10
-    learning_rate = 1e-3
-    momentum = 0.99
-    dropout = 0.1
-    lambda_cov = 0.1
+    # Read hyperparams from wandb.config
+    dropout = wandb.config.dropout      # [0.01, 0.05]
+    learning_rate = wandb.config.learning_rate    # [1e-3, 5e-4, 1e-4]
+    lambda_cov = wandb.config.lambda_cov          # [0.1, 0.5]
+    probe_lr = wandb.config.probe_lr              # [0.002, 0.005, 0.010]
+    batch_size = wandb.config.batch_size          # [128,512,2048]
+
+    num_epochs = wandb.config.get("epochs", 10)
+    momentum = wandb.config.get("momentum", 0.99)
     patience = 3
 
     data_path = "/scratch/DL24FA"
-    train_loader, _ = create_wall_dataloader(
+    train_loader = create_wall_dataloader(
         data_path=f"{data_path}/train",
         probing=False,
         device=device,
         train=True,
         batch_size=batch_size,
-    ), None
+    )
 
     probe_train_ds = create_wall_dataloader(
         data_path=f"{data_path}/probe_normal/train",
@@ -107,7 +118,7 @@ def main():
                     'batch_idx': batch_idx,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict()
-                }, f"checkpoints/jepa_model_d_epoch_{epoch}_batch_{batch_idx}.pth")
+                }, f"checkpoints/jepa_model_e_epoch_{epoch}_batch_{batch_idx}_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth")
 
         avg_epoch_loss = epoch_loss / len(train_loader)
         print(f"Epoch {epoch} Average Loss: {avg_epoch_loss:.4f}")
@@ -117,26 +128,49 @@ def main():
             avg_std = last_pred_encs.std(dim=0).mean().item()
             if avg_std < 1e-3:
                 print("Warning: Potential representation collapse detected! Avg embedding std very low.")
+                wandb.log({"collapse_warning": 1})
 
         # Evaluate after each epoch
         model.eval()
-        from evaluator import ProbingEvaluator, ProbingConfig
         evaluator = ProbingEvaluator(
             device=device,
             model=model,
             probe_train_ds=probe_train_ds,
             probe_val_ds=val_ds,
-            config=ProbingConfig(),
+            config=ProbingConfig(lr=0.0002, epochs=20),  # overridden by wandb.config in evaluator if code was added
             quick_debug=False
         )
+        # We'll just override probe_lr logic here if needed:
+        # In the original code, we rely on evaluator or we can just trust it sets probe_lr from wandb.config
+        # If not integrated, we can add code to override evaluator.config.lr from wandb.config.probe_lr:
+        evaluator.config.lr = probe_lr
+
         prober = evaluator.train_pred_prober()
         avg_losses = evaluator.evaluate_all(prober=prober)
         val_loss_normal = avg_losses["normal"]
         val_loss_wall = avg_losses["wall"]
         print(f"Validation normal loss: {val_loss_normal:.4f}, wall loss: {val_loss_wall:.4f}")
 
-        with open("losses_c.txt", "a") as f:
-            f.write(f"Epoch {epoch}: train_loss={avg_epoch_loss}, val_loss_normal={val_loss_normal}, val_loss_wall={val_loss_wall}\n")
+        wandb.log({
+            "epoch": epoch,
+            "train_loss": avg_epoch_loss,
+            "val_loss_normal": val_loss_normal,
+            "val_loss_wall": val_loss_wall,
+            "learning_rate": optimizer.param_groups[0]['lr'],
+            "probing_lr": probe_lr,
+            "batch_size": batch_size,
+            "dropout": dropout,
+            "lambda_cov": lambda_cov
+        })
+
+        if not os.path.exists("checkpoints"):
+            os.makedirs("checkpoints")
+        torch.save({
+            'epoch': epoch,
+            'batch_idx': -1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict()
+        }, f"checkpoints/jepa_model_c_epoch_{epoch}_final_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth")
 
         # Early stopping
         if best_val_loss_normal is None:
@@ -152,17 +186,8 @@ def main():
                 best_val_loss_normal = val_loss_normal
                 worse_count = 0
 
-        if epoch % 1 == 0:
-            if not os.path.exists("checkpoints"):
-                os.makedirs("checkpoints")
-            torch.save({
-                'epoch': epoch,
-                'batch_idx': -1,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict()
-            }, f"checkpoints/jepa_model_d_epoch_{epoch}_final.pth")
-
     print("Training completed.")
+    wandb.finish()
 
 if __name__ == "__main__":
     main()

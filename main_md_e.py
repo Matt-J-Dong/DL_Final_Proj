@@ -4,7 +4,7 @@ import os
 from collections import OrderedDict
 
 from dataset import create_wall_dataloader
-from models_md_d import JEPA_Model
+from models_md_e import JEPA_Model
 from evaluator_lstm import ProbingEvaluator, ProbingConfig
 
 def get_device():
@@ -41,7 +41,7 @@ def load_data(device):
 def load_model(device):
     if not os.path.exists("checkpoints"):
         raise FileNotFoundError("No checkpoint directory found.")
-    checkpoint_files = glob.glob("checkpoints/jepa_model_d_epoch_*_final.pth")
+    checkpoint_files = glob.glob("checkpoints/jepa_model_e_epoch_*_final.pth")
     if len(checkpoint_files) == 0:
         raise FileNotFoundError("No final checkpoint found.")
     checkpoint_files.sort(key=os.path.getmtime)
