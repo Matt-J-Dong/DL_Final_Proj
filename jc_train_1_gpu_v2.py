@@ -144,10 +144,11 @@ def main():
     num_epochs = 10
     learning_rate = 1e-4
     momentum = 0.99
+    split_ratio = 0.9
 
     mp.set_start_method('spawn')
 
-    train_loader, val_loader = load_data(device, batch_size=batch_size)
+    train_loader, val_loader = load_data(device, batch_size=batch_size, split_ratio=split_ratio)
 
     model = JEPA_Model(device=device, repr_dim=256, action_dim=2)
     model.to(device)
@@ -161,7 +162,6 @@ def main():
         learning_rate=learning_rate,
         momentum=momentum,
         save_every=1,
-        split_ratio=0.9
     )
 
     save_model(trained_model, "final")
