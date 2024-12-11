@@ -133,10 +133,14 @@ class JEPA_Model(nn.Module):
         # Compute standard deviation across the batch dimension
         std_x = torch.sqrt(states.var(dim=0, unbiased=False) + epsilon)
         
+        # Clip extreme values to stabilize loss
+        std_x = torch.clamp(std_x, min=0.1, max=10.0)
+        
         # Penalize dimensions with standard deviation below 1.0
-        variance_loss = torch.mean(torch.relu(1.0 - std_x) ** 2)  # Penalize proportional to deviation
+        variance_loss = torch.mean(torch.relu(1.0 - std_x) ** 2)
         
         return variance_loss
+
 
 
 
@@ -147,15 +151,18 @@ class JEPA_Model(nn.Module):
         batch_size, dim = states.size()
         
         # Center the embeddings
-        states = states - states.mean(dim=0, keepdim=True)  # Center embeddings
+        states = states - states.mean(dim=0, keepdim=True)
         
         # Compute the covariance matrix
         cov_matrix = (states.T @ states) / (batch_size - 1)
         
+        # Normalize covariance matrix by embedding dimension
+        cov_matrix = cov_matrix / dim
+        
         # Remove diagonal and penalize off-diagonal elements
-        cov_loss = cov_matrix - torch.diag(torch.diag(cov_matrix))  # Remove diagonal
+        cov_loss = cov_matrix - torch.diag(torch.diag(cov_matrix))
         num_off_diag = dim * (dim - 1)
-        cov_loss = (cov_loss ** 2).sum() / num_off_diag  # Normalize by number of off-diagonal elements
+        cov_loss = (cov_loss ** 2).sum() / num_off_diag
         
         return cov_loss
 
@@ -215,7 +222,7 @@ class JEPA_Model(nn.Module):
         optimizer.zero_grad()
         loss.backward()
 
-        max_grad_norm = 0.5  # Set the maximum norm for gradients
+        max_grad_norm = 1.0  # Set the maximum norm for gradients
         torch.nn.utils.clip_grad_norm_(self.parameters(), max_grad_norm)
 
         optimizer.step()

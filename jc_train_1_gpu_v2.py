@@ -151,7 +151,7 @@ def main():
     device = get_device()
     batch_size = 512
     num_epochs = 10
-    learning_rate = 1e-4
+    learning_rate = 1e-5
     momentum = 0.9
     split_ratio = 0.9
 
