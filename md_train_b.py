@@ -65,7 +65,7 @@ def load_latest_checkpoint(model, optimizer, learning_rate, dropout, lambda_cov,
     if not os.path.exists(checkpoint_dir):
         return 1, 0  # No checkpoint: start at epoch 1, batch 0
 
-    pattern = f"jepa_model_a_epoch_*_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}.pth"
+    pattern = f"jepa_model_b_epoch_*_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}.pth"
     checkpoint_files = glob.glob(os.path.join(checkpoint_dir, pattern))
     if len(checkpoint_files) == 0:
         return 1, 0  # No checkpoint

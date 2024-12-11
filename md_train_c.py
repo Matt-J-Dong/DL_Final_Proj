@@ -1,14 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.lr_scheduler import CyclicLR
+from torch.optim.lr_scheduler import CyclicLR  # Import CyclicLR directly from torch
 from tqdm.auto import tqdm
 import os
 import glob
 import torch.multiprocessing as mp
 
 from dataset import create_wall_dataloader
-from models_md_c import JEPA_Model  # Ensure models_md_c.py is updated
+from models_md_c import JEPA_Model  # Changed from _a to _c
 from evaluator_md import ProbingEvaluator, ProbingConfig
 from dotenv import load_dotenv
 import wandb
@@ -62,14 +62,12 @@ def save_model(model, optimizer, epoch, batch_idx, learning_rate, dropout, lambd
     }, save_file)
     print(f"Model saved to {save_file}")
 
-def get_probe_lr():
-    return wandb.config.get("probe_lr", 0.0002)
-
 def load_latest_checkpoint(model, optimizer, learning_rate, dropout, lambda_cov, probe_lr, checkpoint_dir="checkpoints_wandb"):
     device = get_device()
     if not os.path.exists(checkpoint_dir):
         return 1, 0
 
+    # Include probe_lr in pattern
     pattern = f"jepa_model_c_epoch_*_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
     checkpoint_files = glob.glob(os.path.join(checkpoint_dir, pattern))
     if len(checkpoint_files) == 0:
@@ -118,7 +116,8 @@ def train_model(
         mode='triangular2'
     )
     
-    probe_lr = get_probe_lr()
+    # Get probe_lr from wandb config, default to 0.0002 if not specified
+    probe_lr = wandb.config.get("probe_lr", 0.0002)
 
     start_epoch, start_batch_idx = load_latest_checkpoint(model, optimizer, learning_rate, dropout, lambda_cov, probe_lr, checkpoint_dir="checkpoints_wandb")
     model.to(device)
@@ -144,9 +143,8 @@ def train_model(
             states = batch.states.to(device)
             actions = batch.actions.to(device)
 
-            # train_step now returns (loss.item(), pred_encs)
-            loss_value, pred_encs = model.train_step(
-                states=states,
+            loss, pred_encs = model.train_step(
+                states=states, 
                 actions=actions,
                 optimizer=optimizer,
                 momentum=momentum,
@@ -154,7 +152,7 @@ def train_model(
                 add_noise=True,
                 lambda_cov=lambda_cov
             )
-            epoch_loss += loss_value
+            epoch_loss += loss
 
             optimizer.step()
             scheduler.step()
@@ -163,7 +161,7 @@ def train_model(
 
             if batch_idx % 50 == 0:
                 print(
-                    f"Epoch [{epoch}/{num_epochs}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss_value:.4f}"
+                    f"Epoch [{epoch}/{num_epochs}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}"
                 )
                 save_model(model, optimizer, epoch, batch_idx, learning_rate, dropout, lambda_cov, probe_lr)
 
@@ -181,7 +179,7 @@ def train_model(
 
         probing_config = ProbingConfig(
             probe_targets="locations",
-            lr=0.0002,  # default; overridden by wandb.config in evaluator if probe_lr is set
+            lr=0.0002,  # default, overridden by wandb.config in evaluator if probe_lr is set
             epochs=20,
             schedule=LRSchedule.Cosine,
             sample_timesteps=30,
@@ -202,7 +200,7 @@ def train_model(
         val_loss_normal = avg_losses["normal"]
         val_loss_wall = avg_losses["wall"]
 
-        current_probe_lr = get_probe_lr()
+        current_probe_lr = wandb.config.get("probe_lr", 0.0002)
         print(f"Validation normal loss: {val_loss_normal:.4f}, Validation wall loss: {val_loss_wall:.4f}, Probing LR: {current_probe_lr}")
 
         wandb.log({
@@ -243,9 +241,11 @@ def train_model(
 def main():
     device = get_device()
 
+    # Compare dropout of 0.05 and 0.1
     dropout_values = [0.05, 0.1]
     learning_rates = [1e-3, 5e-4, 1e-4]
     lambda_cov_values = [0.1, 0.5]
+    # wandb.config should provide probe_lr from {0.002, 0.005, 0.010}, if set by the sweep
 
     batch_size = 512
     num_epochs = 10
@@ -285,7 +285,7 @@ def main():
                     "dropout": d,
                     "learning_rate": lr,
                     "batch_size": batch_size,
-                    "epochs": 10,
+                    "epochs": num_epochs,
                     "momentum": momentum,
                     "distance_function": "l2",
                     "lambda_cov": cov
@@ -302,7 +302,7 @@ def main():
                     probe_train_ds=probe_train_ds,
                     probe_val_normal_ds=probe_val_normal_ds,
                     probe_val_wall_ds=probe_val_wall_ds,
-                    num_epochs=10,
+                    num_epochs=num_epochs,
                     learning_rate=lr,
                     momentum=momentum,
                     save_every=1,
@@ -311,10 +311,10 @@ def main():
                     lambda_cov=cov,
                 )
 
-                probe_lr = get_probe_lr()
+                probe_lr = wandb.config.get("probe_lr", 0.0002)
 
                 optimizer = optim.Adam(trained_model.parameters(), lr=lr, weight_decay=1e-4)
-                save_model(trained_model, optimizer, 10, -1, lr, d, cov, probe_lr)
+                save_model(trained_model, optimizer, num_epochs, -1, lr, d, cov, probe_lr)
 
                 wandb.finish()
 

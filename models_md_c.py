@@ -112,14 +112,13 @@ class JEPA_Model(nn.Module):
     def train_step(self, states, actions, optimizer, momentum=0.99, distance_function="l2", add_noise=False, lambda_cov=0.5):
         B, T, C, H, W = states.shape
 
-        # Add noise
+        # Add noise if requested
         if add_noise:
             states = states + 0.01 * torch.randn_like(states)
 
-        # (Method 4) Random horizontal flip augmentation:
-        # With 50% chance, flip the states horizontally. This simulates data augmentation.
+        # Random horizontal flip with 50% chance for data augmentation
         if torch.rand(1).item() < 0.5:
-            states = torch.flip(states, dims=[3])  # flip width dimension
+            states = torch.flip(states, dims=[3])
 
         init_state = states[:, 0]
         pred_encs = self.forward(init_state, actions)
@@ -139,10 +138,10 @@ class JEPA_Model(nn.Module):
         optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.parameters(), 1.0)
-        # optimizer.step is called outside
 
         with torch.no_grad():
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
 
-        return loss.item()
+        return loss.item(), pred_encs
+
