@@ -9,7 +9,6 @@ from models_jc import JEPA_Model
 import torch.multiprocessing as mp
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
-
 def get_device():
     """Set the device for single-GPU training."""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -18,19 +17,25 @@ def get_device():
 
 def load_data(device, batch_size=64, split_ratio=0.8):
     data_path = "/scratch/DL24FA"
-    full_dataset = create_wall_dataloader(
+
+    # Create the full DataLoader
+    full_loader = create_wall_dataloader(
         data_path=f"{data_path}/train",
         probing=False,
         device=device,
         train=True,
         batch_size=batch_size,
-        return_dataset=True  # Modify this function to return the full dataset
     )
 
+    # Extract the dataset from the DataLoader
+    full_dataset = full_loader.dataset
+
+    # Split into train and validation datasets
     train_size = int(split_ratio * len(full_dataset))
     val_size = len(full_dataset) - train_size
     train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
 
+    # Create DataLoaders for train and validation sets
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
@@ -113,7 +118,6 @@ def train_model(
 
     print("Training completed.")
     return model
-
 
 def main():
     device = get_device()
