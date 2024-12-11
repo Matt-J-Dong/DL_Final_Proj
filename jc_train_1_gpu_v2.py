@@ -48,21 +48,37 @@ def save_model(model, epoch, save_path="checkpoints"):
     print(f"Model saved to {save_file}")
 
 def validate_model(model, val_loader, device, distance_function="l2"):
+    """
+    Perform validation. Simplifies computation for speed by using a subset.
+    """
     model.eval()
     val_loss = 0.0
     with torch.no_grad():
-        for batch in tqdm(val_loader, desc="Validating"):
+        for batch in tqdm(val_loader, desc="Validating", leave=False):  # Minimize display overhead
             states = batch.states.to(device)
             actions = batch.actions.to(device)
-            loss = model.compute_loss(
-                states=states,
-                actions=actions,
-                distance_function=distance_function,
-            )
+
+            # Simplify validation by reducing the temporal aspect of states/actions if applicable
+            B, T, C, H, W = states.shape
+            sampled_t = max(1, T // 2)  # Use one representative state-action pair to reduce computation
+            sampled_states = states[:, :sampled_t]
+            sampled_actions = actions[:, :sampled_t - 1]
+
+            init_state = sampled_states[:, 0]
+            predicted_encs = model.forward(init_state, sampled_actions)
+
+            # Use only sampled target states for validation
+            target_encs = []
+            for t in range(sampled_t):
+                o_t = sampled_states[:, t]
+                s_target = model.target_encoder(o_t)
+                target_encs.append(s_target)
+            target_encs = torch.stack(target_encs, dim=1)
+
+            # Compute loss for the sampled subset
+            loss = model.compute_loss(predicted_encs, target_encs, distance_function)
             val_loss += loss.item()
-    avg_val_loss = val_loss / len(val_loader)
-    print(f"Validation Loss: {avg_val_loss:.4f}")
-    return avg_val_loss
+    return val_loss / len(val_loader)
 
 def train_model(
     device,
@@ -73,7 +89,6 @@ def train_model(
     learning_rate=1e-3,
     momentum=0.99,
     save_every=1,
-    train_sampler=None,
     distance_function="l2"
 ):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -81,14 +96,13 @@ def train_model(
     model.train()
 
     for epoch in range(1, num_epochs + 1):
-        if train_sampler:
-            train_sampler.set_epoch(epoch)
         epoch_loss = 0.0
 
         for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
             states = batch.states.to(device)
             actions = batch.actions.to(device)
 
+            # Perform a training step
             loss = model.train_step(
                 states=states,
                 actions=actions,
@@ -96,7 +110,6 @@ def train_model(
                 momentum=momentum,
                 distance_function=distance_function,
             )
-
             epoch_loss += loss
 
             if batch_idx % 100 == 0:
@@ -104,17 +117,23 @@ def train_model(
                     f"Epoch [{epoch}/{num_epochs}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}"
                 )
                 save_model(model, f"{epoch}_batch_{batch_idx}")
-                validate_model(model, val_loader, device, distance_function)
+
+                # Perform validation
+                val_loss = validate_model(model, val_loader, device, distance_function)
+                print(f"Validation Loss (Batch {batch_idx}): {val_loss:.4f}")
 
         avg_epoch_loss = epoch_loss / len(train_loader)
         print(f"Epoch [{epoch}/{num_epochs}] Average Loss: {avg_epoch_loss:.4f}")
 
-        # Step the scheduler at the end of each epoch
+        # Step the learning rate scheduler
         scheduler.step()
 
         if epoch % save_every == 0:
             save_model(model, epoch)
-            validate_model(model, val_loader, device, distance_function)
+
+            # Perform validation at the end of each epoch
+            val_loss = validate_model(model, val_loader, device, distance_function)
+            print(f"Validation Loss (Epoch {epoch}): {val_loss:.4f}")
 
     print("Training completed.")
     return model
