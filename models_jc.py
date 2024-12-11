@@ -175,7 +175,7 @@ class JEPA_Model(nn.Module):
 
         # Compute the loss function
         lambda_var, lambda_cov = 1.0, 1.0  # Tunable hyperparameters
-        loss = self.computer_loss(pred_encs, target_encs, distance_function, lambda_var, lambda_cov)
+        loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_var, lambda_cov)
 
 
         # Backpropagation
