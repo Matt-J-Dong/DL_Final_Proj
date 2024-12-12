@@ -200,6 +200,7 @@ class JEPA_Model(nn.Module):
                    lambda_energy=1.0, 
                    lambda_var=1.0, 
                    lambda_cov=1.0,
+                   debug=False,
                    max_grad_norm=1.0):
         """
         Perform a single training step.
@@ -224,7 +225,10 @@ class JEPA_Model(nn.Module):
         target_encs = torch.stack(target_encs, dim=1)
 
         # Compute the loss function
-        loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov)
+        if not debug:
+            loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov)
+        else:
+            loss, energy, var, cov = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov, debug=True)
 
 
         # Backpropagation
@@ -241,7 +245,7 @@ class JEPA_Model(nn.Module):
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
 
-        return loss.item()
+        return loss.item() if not debug else (loss.item(), energy.item(), var.item(), cov.item())
     
     def compute_loss(self, pred_encs, target_encs, distance_function="l2", lambda_energy=1.0, lambda_var=1.0, lambda_cov=1.0, debug=False):
         """
