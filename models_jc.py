@@ -202,7 +202,8 @@ class JEPA_Model(nn.Module):
                    lambda_cov=1.0,
                    debug=False,
                    max_grad_norm=0.5,
-                   min_variance = 1.0):
+                   min_variance = 1.0,
+                   *args, **kwargs):
         """
         Perform a single training step.
 
@@ -290,7 +291,8 @@ class JEPA_Model(nn.Module):
                  lambda_contrastive=0.1, 
                  margin=1.0, 
                  debug=False, 
-                 min_variance=1.0):
+                 min_variance=1.0,
+                 *args, **kwargs):
         """
         Compute the loss function with contrastive loss added.
         """
@@ -302,7 +304,7 @@ class JEPA_Model(nn.Module):
         cov = lambda_cov * self.covariance_regularization(pred_encs)
 
         # Compute contrastive loss
-        contrastive = lambda_contrastive * contrastive_loss(pred_encs, target_encs, margin=margin)
+        contrastive = lambda_contrastive * self.contrastive_loss(pred_encs, target_encs, margin=margin)
 
         # Total loss
         loss = energy + var + cov + contrastive
