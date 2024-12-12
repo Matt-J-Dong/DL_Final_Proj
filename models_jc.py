@@ -244,4 +244,8 @@ class JEPA_Model(nn.Module):
         var = lambda_var * self.variance_regularization(pred_encs)
         cov = lambda_cov * self.covariance_regularization(pred_encs)
         loss = energy + var + cov
-        return loss if not debug else (loss, energy, var, cov)
+        if not debug:
+            return loss
+        else:
+            print(f'lambda_energy: {lambda_energy}, lambda_var: {lambda_var}, lambda_cov: {lambda_cov}')
+            return (loss, energy, var, cov)
