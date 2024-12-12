@@ -166,7 +166,7 @@ def main():
 
     train_loader, val_loader = load_data(device, batch_size=batch_size, split_ratio=split_ratio)
 
-    model = JEPA_Model(device=device, repr_dim=256, action_dim=2)
+    model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout_prob=0)
     model.to(device)
 
     trained_model = train_model(
