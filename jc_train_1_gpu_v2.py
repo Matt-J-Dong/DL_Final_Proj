@@ -48,12 +48,7 @@ def save_model(model, epoch, save_path="checkpoints"):
     torch.save(model.state_dict(), save_file)
     print(f"Model saved to {save_file}")
 
-def validate_model(model, 
-                   val_loader, 
-                   device, 
-                   distance_function="l2", 
-                   lambda_energy=1.0, lambda_var=1.0, lambda_cov=0.0,
-                   normalizer=Normalizer()):
+def validate_model(model, val_loader, device, distance_function="l2", lambda_energy=1.0, lambda_var=1.0, lambda_cov=0.0):
     """
     Perform validation. Simplifies computation for speed by using a subset.
     """
@@ -61,15 +56,17 @@ def validate_model(model,
     val_loss = 0.0
     var_culm = 0.0
     cov_culm = 0.0
+    normalizer = Normalizer()  # Initialize the normalizer
 
     with torch.no_grad():
         for batch in tqdm(val_loader, desc="Validating", leave=False):  # Minimize display overhead
             states = batch.states.to(device)
             actions = batch.actions.to(device)
 
-            actions = normalizer.normalize_location(actions)
-            if states.size(2) > 1:  # Assuming channel 0 is location and channel 1 is walls
-                states[:, :, 0] = normalizer.normalize_location(states[:, :, 0])
+            # Normalize the states
+            locations = states[:, :, 0].view(-1, 2)  # Reshape to [B*T, 2]
+            locations = normalizer.normalize_location(locations)  # Normalize
+            states[:, :, 0] = locations.view(states.size(0), states.size(1), 2)  # Reshape back to [B, T, 2]
 
             # Simplify validation by reducing the temporal aspect of states/actions if applicable
             B, T, C, H, W = states.shape
@@ -89,7 +86,15 @@ def validate_model(model,
             target_encs = torch.stack(target_encs, dim=1)
 
             # Compute loss for the sampled subset
-            loss, _, var, cov = model.compute_loss(predicted_encs, target_encs, distance_function, debug=True, lambda_energy=lambda_energy, lambda_var=lambda_var, lambda_cov=lambda_cov)
+            loss, _, var, cov = model.compute_loss(
+                predicted_encs,
+                target_encs,
+                distance_function,
+                debug=True,
+                lambda_energy=lambda_energy,
+                lambda_var=lambda_var,
+                lambda_cov=lambda_cov,
+            )
             val_loss += loss.item()
             var_culm += var
             cov_culm += cov
