@@ -126,46 +126,31 @@ class JEPA_Model(nn.Module):
         pred_encs = torch.stack(pred_encs, dim=1)
         return pred_encs
 
-    def variance_regularization(self, states, epsilon=1e-3):
-        if states.ndim == 3:  # [B, T, D]
-            states = states.view(-1, states.size(-1))  # Flatten to [B*T, D]
+    def variance_regularization(self, states, epsilon=1e-4):
+        if states.ndim == 3:
+            states = states.view(-1, states.size(-1))
         
-        # Compute standard deviation across the batch dimension
-        std_x = torch.sqrt(states.var(dim=0, unbiased=False) + epsilon)
+        std_x = torch.sqrt(states.var(dim=0) + epsilon)
         
-        # Clip extreme values to stabilize loss
-        std_x = torch.clamp(std_x, min=0.1, max=10.0)
-        
-        # Penalize dimensions with standard deviation below 1.0
-        variance_loss = torch.mean(torch.relu(1.0 - std_x) ** 2)
+        # VicReg-style variance regularization
+        variance_loss = torch.mean(torch.relu(1.0 - std_x))
         
         return variance_loss
 
-
-
-
-    def covariance_regularization(self, states):
-        if states.ndim == 3:  # [B, T, D]
-            states = states.view(-1, states.size(-1))  # Flatten to [B*T, D]
+    def covariance_regularization(self, states, epsilon=1e-4):
+        if states.ndim == 3:
+            states = states.view(-1, states.size(-1))
         
         batch_size, dim = states.size()
+        states = states - states.mean(dim=0)
         
-        # Center the embeddings
-        states = states - states.mean(dim=0, keepdim=True)
+        # Covariance matrix computation
+        cov_matrix = (states.t() @ states) / (batch_size - 1)
         
-        # Compute the covariance matrix
-        cov_matrix = (states.T @ states) / (batch_size - 1)
+        # Off-diagonal covariance penalty
+        cov_loss = torch.sum(cov_matrix.pow(2)) - torch.sum(torch.diag(cov_matrix).pow(2))
         
-        # Normalize covariance matrix by embedding dimension
-        cov_matrix = cov_matrix / dim
-        
-        # Remove diagonal and penalize off-diagonal elements
-        cov_loss = cov_matrix - torch.diag(torch.diag(cov_matrix))
-        num_off_diag = dim * (dim - 1)
-        cov_loss = (cov_loss ** 2).sum() / num_off_diag
-        cov_loss = torch.clamp(cov_loss, max=100.0)
-        
-        return cov_loss
+        return cov_loss / dim
 
 
 
@@ -215,7 +200,7 @@ class JEPA_Model(nn.Module):
         target_encs = torch.stack(target_encs, dim=1)
 
         # Compute the loss function
-        lambda_energy, lambda_var, lambda_cov = 3, 10, 0.05  # Tunable hyperparameters
+        lambda_energy, lambda_var, lambda_cov = 1.0, 25.0, 1.0  # Tunable hyperparameters
         loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov)
 
 

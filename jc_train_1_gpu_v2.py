@@ -95,7 +95,7 @@ def train_model(
     val_loader,
     num_epochs=1,
     learning_rate=1e-3,
-    momentum=0.99,
+    momentum=0.996,
     save_every=1,
     distance_function="l2"
 ):
@@ -151,8 +151,8 @@ def main():
     device = get_device()
     batch_size = 512
     num_epochs = 10
-    learning_rate = 1e-5
-    momentum = 0.9
+    learning_rate = 2e-4
+    momentum = 0.996
     split_ratio = 0.9
 
     mp.set_start_method('spawn')
