@@ -247,5 +247,5 @@ class JEPA_Model(nn.Module):
         if not debug:
             return loss
         else:
-            # print(f'lambda_energy: {lambda_energy}, lambda_var: {lambda_var}, lambda_cov: {lambda_cov}')
+            print(f'lambda_energy: {lambda_energy}, lambda_var: {lambda_var}, lambda_cov: {lambda_cov}')
             return (loss, energy, var, cov)
