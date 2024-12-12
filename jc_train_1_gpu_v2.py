@@ -171,8 +171,8 @@ def train_model(
                 wandb.log({
                     "loss": loss, 
                     "energy_loss": e_loss, 
-                    # "variance_loss": var_loss, 
-                    # "covariance_loss": cov_loss
+                    "variance_loss": var_loss, 
+                    "covariance_loss": cov_loss
                 })
 
 
