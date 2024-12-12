@@ -213,7 +213,7 @@ class JEPA_Model(nn.Module):
         target_encs = torch.stack(target_encs, dim=1)
 
         # Compute the loss function
-        lambda_energy, lambda_var, lambda_cov = 25.0, 25.0, 0.1  # Tunable hyperparameters
+        lambda_energy, lambda_var, lambda_cov = 25.0, 25.0, 1.0  # Tunable hyperparameters
         loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov)
 
 
