@@ -132,8 +132,10 @@ class JEPA_Model(nn.Module):
         
         std_x = torch.sqrt(states.var(dim=0) + epsilon)
         
-        # VicReg-style variance regularization
-        variance_loss = torch.mean(torch.relu(1.0 - std_x))
+        # Modify with a minimum variance threshold
+        min_variance = 1.0
+        variance_loss = torch.mean(torch.relu(min_variance - std_x))
+
         
         return variance_loss
 
