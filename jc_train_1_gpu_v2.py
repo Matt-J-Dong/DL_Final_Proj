@@ -210,7 +210,7 @@ def main():
     learning_rate = 2e-6
     momentum = 0.996
     split_ratio = 0.9
-    lambda_energy, lambda_var, lambda_cov = 1.0, 0.0, 0.0  # Tunable hyperparameters
+    lambda_energy, lambda_var, lambda_cov = 1.0, 0.1, 0.01  # Tunable hyperparameters
     max_grad_norm = 0.5
     min_variance = 0.1
     

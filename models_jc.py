@@ -198,8 +198,8 @@ class JEPA_Model(nn.Module):
                    momentum=0.99, 
                    distance_function="l2", 
                    lambda_energy=1.0, 
-                   lambda_var=0.1, 
-                   lambda_cov=0.01,
+                   lambda_var=1.0, 
+                   lambda_cov=1.0,
                    debug=False,
                    max_grad_norm=0.5,
                    min_variance = 1.0):
