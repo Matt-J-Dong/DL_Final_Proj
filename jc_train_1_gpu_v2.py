@@ -136,7 +136,7 @@ def train_model(
 
             # Normalize location data (reshape to match Normalizer input)
             locations = states[:, :, 0]  # Extract the 0th channel
-            # print(f"Shape of locations before reshaping: {locations.shape}")  # Debugging
+            print(f"Shape of locations before reshaping: {locations.shape}")  # Debugging
             locations = locations.reshape(-1, 2)  # Reshape to match normalization input
             states[:, :, 0] = normalizer.normalize_location(locations).reshape(states[:, :, 0].shape)
 
@@ -154,7 +154,7 @@ def train_model(
             )
             epoch_loss += loss
 
-            if batch_idx % 100 == 0:
+            if batch_idx % 100 == 0 and batch_idx != 0:
                 print(
                     f"Epoch [{epoch}/{num_epochs}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}"
                 )
