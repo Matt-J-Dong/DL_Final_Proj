@@ -310,7 +310,7 @@ if __name__ == "__main__":
         "method": "grid",
         "parameters": {
             "momentum": {"values": [0.9, 0.99]},
-            "batch_size": {"values": [64, 256, 1024]},
+            "batch_size": {"values": [256, 1024]},
             "probe_lr": {"values": [0.0005, 0.002, 0.008]},
             "lambda_cov": {"values": [0.1, 0.4, 0.7]},
             "learning_rate": {"values": [5e-4, 1e-3, 5e-3]},
