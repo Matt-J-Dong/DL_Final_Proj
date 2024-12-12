@@ -160,7 +160,7 @@ def main():
     learning_rate = 2e-4
     momentum = 0.996
     split_ratio = 0.9
-    lambda_energy, lambda_var, lambda_cov = 1.0, 1.0, 0.0  # Tunable hyperparameters
+    lambda_energy, lambda_var, lambda_cov = 1.0, 0.0, 0.0  # Tunable hyperparameters
 
     mp.set_start_method('spawn')
 
