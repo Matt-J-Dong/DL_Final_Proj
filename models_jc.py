@@ -233,7 +233,7 @@ class JEPA_Model(nn.Module):
 
         return loss.item()
     
-    def compute_loss(self, pred_encs, target_encs, distance_function="l2", lambda_energy=1.0, lambda_var=1.0, lambda_cov=1.0, debug=False):
+    def compute_loss(self, pred_encs, target_encs, distance_function="l2", lambda_energy=0.0, lambda_var=0.0, lambda_cov=0.0, debug=False):
         """
         Compute the loss function.
         """
