@@ -8,6 +8,7 @@ from dataset import create_wall_dataloader
 from models_jc import JEPA_Model
 import torch.multiprocessing as mp
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from normalizer import Normalizer
 
 def get_device():
     """Set the device for single-GPU training."""
@@ -47,7 +48,12 @@ def save_model(model, epoch, save_path="checkpoints"):
     torch.save(model.state_dict(), save_file)
     print(f"Model saved to {save_file}")
 
-def validate_model(model, val_loader, device, distance_function="l2", lambda_energy=1.0, lambda_var=1.0, lambda_cov=0.0):
+def validate_model(model, 
+                   val_loader, 
+                   device, 
+                   distance_function="l2", 
+                   lambda_energy=1.0, lambda_var=1.0, lambda_cov=0.0,
+                   normalizer=Normalizer()):
     """
     Perform validation. Simplifies computation for speed by using a subset.
     """
@@ -60,6 +66,10 @@ def validate_model(model, val_loader, device, distance_function="l2", lambda_ene
         for batch in tqdm(val_loader, desc="Validating", leave=False):  # Minimize display overhead
             states = batch.states.to(device)
             actions = batch.actions.to(device)
+
+            actions = normalizer.normalize_location(actions)
+            if states.size(2) > 1:  # Assuming channel 0 is location and channel 1 is walls
+                states[:, :, 0] = normalizer.normalize_location(states[:, :, 0])
 
             # Simplify validation by reducing the temporal aspect of states/actions if applicable
             B, T, C, H, W = states.shape
@@ -101,6 +111,7 @@ def train_model(
     lambda_energy=1.0,
     lambda_var=1.0,
     lambda_cov=0.0,
+    normalizer=Normalizer(),
 ):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs)
@@ -113,6 +124,10 @@ def train_model(
         for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
             states = batch.states.to(device)
             actions = batch.actions.to(device)
+
+            actions = normalizer.normalize_location(actions)
+            if states.size(2) > 1:  # Assuming channel 0 is location and channel 1 is walls
+                states[:, :, 0] = normalizer.normalize_location(states[:, :, 0])
 
             # Perform a training step
             loss = model.train_step(
