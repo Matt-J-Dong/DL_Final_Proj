@@ -65,9 +65,15 @@ def validate_model(model, val_loader, device, distance_function="l2", lambda_ene
 
             # Normalize the states
             locations = states[:, :, 0]  # Extract the 0th channel
-            # print(f"Shape of locations before reshaping: {locations.shape}")  # Debugging
+            print(f"Shape of locations before reshaping: {locations.shape}")  # Debugging
+
+            # Validate divisibility before reshaping
+            if locations.numel() % 2 != 0:
+                raise ValueError(f"Cannot reshape tensor with {locations.numel()} elements into shape [-1, 2]")
+
             locations = locations.reshape(-1, 2)  # Reshape to match normalization input
             states[:, :, 0] = normalizer.normalize_location(locations).reshape(states[:, :, 0].shape)
+
 
 
             # Simplify validation by reducing the temporal aspect of states/actions if applicable
