@@ -1,6 +1,5 @@
 '''
 singularity exec --nv --overlay /scratch/$USER/my_env/overlay-15GB-500K.ext3:ro /scratch/work/public/singularity/cuda12.3.2-cudnn9.0.0-ubuntu-22.04.4.sif /bin/bash
-singularity exec --nv --memory 16G --cpu 4 --overlay /scratch/$USER/my_env/overlay-15GB-500K.ext3:ro /scratch/work/public/singularity/cuda12.3.2-cudnn9.0.0-ubuntu-22.04.4.sif /bin/bash
 
 source /ext3/env.sh
 cd /scratch/dq2024/DL_Final_Proj/
