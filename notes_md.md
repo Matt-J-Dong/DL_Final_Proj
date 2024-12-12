@@ -4,6 +4,7 @@ Model version 7 likely also bad.
 Model version d is a new architecture. Version d is withou wandb and is basic.
 Version e adds wandb.
 Version c is the most recent version of ResNet50.
+Version f builds on it with new hyperparameters.
 
 
 c12m85-a100-1
