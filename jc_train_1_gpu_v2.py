@@ -111,11 +111,13 @@ def train_model(
     lambda_energy=1.0,
     lambda_var=1.0,
     lambda_cov=0.0,
-    normalizer=Normalizer(),
 ):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs)
     model.train()
+
+    # Initialize normalizer
+    normalizer = Normalizer()
 
     for epoch in range(1, num_epochs + 1):
         print(f"Epoch {epoch}, Learning Rate: {optimizer.param_groups[0]['lr']:.6f}")
@@ -125,9 +127,10 @@ def train_model(
             states = batch.states.to(device)
             actions = batch.actions.to(device)
 
-            actions = normalizer.normalize_location(actions)
-            if states.size(2) > 1:  # Assuming channel 0 is location and channel 1 is walls
-                states[:, :, 0] = normalizer.normalize_location(states[:, :, 0])
+            # Normalize location data (reshape to match Normalizer input)
+            locations = states[:, :, 0].view(-1, 2)  # Reshape to [B*T, 2]
+            locations = normalizer.normalize_location(locations)  # Normalize
+            states[:, :, 0] = locations.view(states.size(0), states.size(1), 2)  # Reshape back to [B, T, 2]
 
             # Perform a training step
             loss = model.train_step(
