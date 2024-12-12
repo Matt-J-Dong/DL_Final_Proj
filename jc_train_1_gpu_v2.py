@@ -190,7 +190,7 @@ def main():
     device = get_device()
     batch_size = 512
     num_epochs = 10
-    learning_rate = 2e-4
+    learning_rate = 2e-7
     momentum = 0.996
     split_ratio = 0.9
     lambda_energy, lambda_var, lambda_cov = 1.0, 0.0, 0.0  # Tunable hyperparameters
