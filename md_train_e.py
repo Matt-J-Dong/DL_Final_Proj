@@ -22,18 +22,31 @@ def get_device():
     return torch.device('cpu')
 
 def main():
-    wandb.init(project="jepa_sweep_2")  # Initialize W&B run
+    # Initialize WandB project and set default hyperparameters
+    wandb.init(
+        project="jepa_sweep_2",
+        config={
+            "dropout": 0.0,
+            "learning_rate": 1e-3,
+            "lambda_cov": 0.1,
+            "probe_lr": 0.002,
+            "batch_size": 128,
+            "epochs": 10,
+            "momentum": 0.99
+        }
+    )
+
     device = get_device()
 
-    # Read hyperparams from wandb.config
-    dropout = wandb.config.dropout      # [0.01, 0.05]
-    learning_rate = wandb.config.learning_rate    # [1e-3, 5e-4, 1e-4]
-    lambda_cov = wandb.config.lambda_cov          # [0.1, 0.5]
-    probe_lr = wandb.config.probe_lr              # [0.002, 0.005, 0.010]
-    batch_size = wandb.config.batch_size          # [128,512,2048]
+    # Read hyperparameters from wandb.config
+    dropout = wandb.config.dropout
+    learning_rate = wandb.config.learning_rate
+    lambda_cov = wandb.config.lambda_cov
+    probe_lr = wandb.config.probe_lr
+    batch_size = wandb.config.batch_size
 
-    num_epochs = wandb.config.get("epochs", 10)
-    momentum = wandb.config.get("momentum", 0.99)
+    num_epochs = wandb.config.epochs
+    momentum = wandb.config.momentum
     patience = 3
 
     data_path = "/scratch/DL24FA"
@@ -137,13 +150,9 @@ def main():
             model=model,
             probe_train_ds=probe_train_ds,
             probe_val_ds=val_ds,
-            config=ProbingConfig(lr=0.0002, epochs=20),  # overridden by wandb.config in evaluator if code was added
+            config=ProbingConfig(lr=probe_lr, epochs=20),
             quick_debug=False
         )
-        # We'll just override probe_lr logic here if needed:
-        # In the original code, we rely on evaluator or we can just trust it sets probe_lr from wandb.config
-        # If not integrated, we can add code to override evaluator.config.lr from wandb.config.probe_lr:
-        evaluator.config.lr = probe_lr
 
         prober = evaluator.train_pred_prober()
         avg_losses = evaluator.evaluate_all(prober=prober)
@@ -190,4 +199,21 @@ def main():
     wandb.finish()
 
 if __name__ == "__main__":
-    main()
+    sweep_config = {
+        "method": "grid",  # or "random" for random search
+        "parameters": {
+            "momentum": {"values": [0.9, 0.99]},
+            "batch_size": {"values": [64, 256, 1024]},
+            "probe_lr": {"values": [0.0005, 0.002, 0.008]},
+            "lambda_cov": {"values": [0.1, 0.4, 0.7]},
+            "learning_rate": {"values": [5e-4, 1e-3, 5e-3]},
+            "dropout": {"values": [0.0]}  # You can adjust this if needed
+        }
+    }
+
+    sweep_id = wandb.sweep(sweep=sweep_config, project="jepa_sweep_2")
+
+    def sweep_train():
+        main()
+
+    wandb.agent(sweep_id, function=sweep_train)

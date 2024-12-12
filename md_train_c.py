@@ -103,7 +103,7 @@ def train_model(
     save_every=1,
     train_sampler=None,
     distance_function="l2",
-    dropout=0.1,
+    dropout=0.0,
     lambda_cov=0.1,
 ):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
@@ -127,7 +127,7 @@ def train_model(
 
     best_val_loss_normal = None
     worse_count = 0
-    patience = 3
+    patience = 4
     last_pred_encs = None
 
     for epoch in range(start_epoch, num_epochs + 1):
@@ -224,7 +224,7 @@ def train_model(
             if val_loss_normal > best_val_loss_normal:
                 worse_count += 1
                 if worse_count == patience:
-                    print("Early stopping triggered: Validation loss increased 3 epochs in a row.")
+                    print("Early stopping triggered: Validation loss increased 4 epochs in a row.")
                     break
             else:
                 best_val_loss_normal = val_loss_normal
@@ -241,8 +241,7 @@ def train_model(
 def main():
     device = get_device()
 
-    # Compare dropout of 0.05 and 0.1
-    dropout_values = [0.05, 0.1]
+    dropout_values = [0.0]
     learning_rates = [1e-3, 5e-4, 1e-4]
     lambda_cov_values = [0.1, 0.5]
     # wandb.config should provide probe_lr from {0.002, 0.005, 0.010}, if set by the sweep
