@@ -8,3 +8,5 @@ data/DL24FA
 data/
 checkpoints/*
 .env
+wandb/
+checkpoints_wandb/

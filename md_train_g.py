@@ -8,7 +8,7 @@ import glob
 import torch.multiprocessing as mp
 
 from dataset import create_wall_dataloader
-from models_md_f import JEPA_Model
+from models_md_g import JEPA_Model
 from evaluator_md import ProbingEvaluator, ProbingConfig
 from dotenv import load_dotenv
 import wandb
@@ -19,6 +19,7 @@ os.environ["WANDB_API_KEY"] = WANDB_API_KEY
 wandb.login(key=WANDB_API_KEY)
 
 def get_device():
+    """Set the device for single-GPU training."""
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -27,8 +28,7 @@ def get_device():
     return device
 
 def load_data(device, batch_size=64, is_distributed=False, subset_size=1000):
-    #data_path = "/scratch/DL24FA"
-    data_path = "./data/DL24FA"
+    data_path = "/scratch/DL24FA"
     train_loader = create_wall_dataloader(
         data_path=f"{data_path}/train",
         probing=False,
@@ -45,12 +45,12 @@ def save_model(model, optimizer, epoch, batch_idx, learning_rate, dropout, lambd
     if batch_idx == -1:
         save_file = os.path.join(
             save_path,
-            f"jepa_model_f_epoch_{epoch}_final_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
+            f"jepa_model_g_epoch_{epoch}_final_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
         )
     else:
         save_file = os.path.join(
             save_path,
-            f"jepa_model_f_epoch_{epoch}_batch_{batch_idx}_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
+            f"jepa_model_g_epoch_{epoch}_batch_{batch_idx}_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
         )
 
     torch.save({
@@ -135,12 +135,23 @@ def train_model(
             train_sampler.set_epoch(epoch)
 
         epoch_loss = 0.0
+
         for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
             if batch_idx < start_batch_idx and epoch == start_epoch:
                 continue
 
             states = batch.states.to(device)
             actions = batch.actions.to(device)
+
+            # Normalize data per batch:
+            # Compute mean/std for states and actions, then normalize
+            states_mean = states.mean()
+            states_std = states.std() + 1e-8
+            states = (states - states_mean) / states_std
+
+            actions_mean = actions.mean()
+            actions_std = actions.std() + 1e-8
+            actions = (actions - actions_mean) / actions_std
 
             loss_value, pred_encs = model.train_step(
                 states=states,
@@ -165,25 +176,25 @@ def train_model(
         avg_epoch_loss = epoch_loss / len(train_loader)
         print(f"Epoch [{epoch}/{num_epochs}] Average Loss: {avg_epoch_loss:.4f}")
 
-        # Check representation collapse
+        # Check for representation collapse
         if last_pred_encs is not None:
             avg_std = last_pred_encs.std(dim=0).mean().item()
             if avg_std < 1e-3:
                 print("Warning: Potential representation collapse detected! Avg embedding std is very low.")
                 wandb.log({"collapse_warning": 1})
 
-        # Evaluate model
+        # Evaluate model using ProbingEvaluator
         model.eval()
+
         probing_config = ProbingConfig(
             probe_targets="locations",
-            lr=0.0002,  
+            lr=0.0002,  # default, overridden below
             epochs=20,
             schedule=None,
             sample_timesteps=30,
             prober_arch="256",
         )
 
-        from evaluator_md import ProbingEvaluator
         evaluator = ProbingEvaluator(
             device=device,
             model=model,
@@ -192,12 +203,15 @@ def train_model(
             config=probing_config,
             quick_debug=False
         )
+
+        # Override probe_lr from wandb.config
         evaluator.config.lr = probe_lr
 
         prober = evaluator.train_pred_prober()
         avg_losses = evaluator.evaluate_all(prober=prober)
         val_loss_normal = avg_losses["normal"]
         val_loss_wall = avg_losses["wall"]
+
         current_probe_lr = probe_lr
         print(f"Validation normal loss: {val_loss_normal:.4f}, Validation wall loss: {val_loss_wall:.4f}, Probing LR: {current_probe_lr}")
 
@@ -210,7 +224,7 @@ def train_model(
             "probing_lr": current_probe_lr,
             "dropout": dropout,
             "lambda_cov": lambda_cov,
-            "batch_size": wandb.config.get("batch_size", 64),
+            "batch_size": wandb.config.get("batch_size"),
             "momentum": momentum
         })
 
@@ -219,7 +233,6 @@ def train_model(
 
         model.train()
 
-        # Early stopping
         if best_val_loss_normal is None:
             best_val_loss_normal = val_loss_normal
             worse_count = 0
@@ -242,10 +255,11 @@ def train_model(
     return model
 
 def main():
-    # main is the function wandb.agent calls for each sweep run
-    wandb.init()
+    wandb.init(project="my_jepa_project_sweep")
+
     device = get_device()
 
+    # Hyperparameters from wandb.config
     dropout = wandb.config.get("dropout", 0.0)
     learning_rate = wandb.config.get("learning_rate", 1e-3)
     lambda_cov = wandb.config.get("lambda_cov", 0.1)
@@ -256,8 +270,7 @@ def main():
 
     train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
 
-    #data_path = "/scratch/DL24FA"
-    data_path = "./data/DL24FA"
+    data_path = "/scratch/DL24FA"
     probe_train_ds = create_wall_dataloader(
         data_path=f"{data_path}/probe_normal/train",
         probing=True,
@@ -302,24 +315,11 @@ def main():
     )
 
     probe_lr = get_probe_lr()
+
     optimizer = optim.Adam(trained_model.parameters(), lr=learning_rate, weight_decay=1e-4)
     save_model(trained_model, optimizer, num_epochs, -1, learning_rate, dropout, lambda_cov, probe_lr)
+
     wandb.finish()
 
 if __name__ == "__main__":
-    # Define the sweep config
-    sweep_config = {
-        "method": "grid",
-        "parameters": {
-            "momentum": {"values": [0.9, 0.99]},
-            "batch_size": {"values": [256, 1024]},
-            "probe_lr": {"values": [0.0005, 0.002, 0.008]},
-            "lambda_cov": {"values": [0.1, 0.4, 0.7]},
-            "learning_rate": {"values": [5e-4, 1e-3, 5e-3]},
-            "dropout": {"values": [0.0]}
-        }
-    }
-
-    # Create the sweep and run the agent
-    sweep_id = wandb.sweep(sweep_config, project='my_jepa_project')
-    wandb.agent(sweep_id, function=main)
+    main()
