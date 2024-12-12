@@ -9,6 +9,7 @@ from models_jc import JEPA_Model
 import torch.multiprocessing as mp
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from normalizer import Normalizer
+import wandb
 
 def get_device():
     """Set the device for single-GPU training."""
@@ -124,6 +125,7 @@ def train_model(
     lambda_energy=1.0,
     lambda_var=1.0,
     lambda_cov=0.0,
+    max_grad_norm=1.0,
 ):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs)
@@ -148,7 +150,7 @@ def train_model(
 
 
             # Perform a training step
-            loss = model.train_step(
+            loss, e_loss, var_loss, cov_loss = model.train_step(
                 states=states,
                 actions=actions,
                 optimizer=optimizer,
@@ -157,8 +159,19 @@ def train_model(
                 lambda_energy=lambda_energy,
                 lambda_var=lambda_var,
                 lambda_cov=lambda_cov,
+                debug=True,
+                max_grad_norm=max_grad_norm,
             )
             epoch_loss += loss
+
+            if batch_idx % 25 == 0:
+                wandb.log({
+                    "loss": loss, 
+                    "energy_loss": e_loss, 
+                    # "variance_loss": var_loss, 
+                    # "covariance_loss": cov_loss
+                })
+
 
             if batch_idx % 100 == 0:
                 print(
@@ -194,6 +207,28 @@ def main():
     momentum = 0.996
     split_ratio = 0.9
     lambda_energy, lambda_var, lambda_cov = 1.0, 0.0, 0.0  # Tunable hyperparameters
+    max_grad_norm = 0.1
+    
+    wandb.init(
+        # set the wandb project where this run will be logged
+        project="DL_Final_Project_2024",
+
+        # track hyperparameters and run metadata
+        config={
+            "learning_rate": learning_rate,
+            "architecture": "JEPA",
+
+            "dataset": "agent_state_actions",
+            "epochs": num_epochs,
+            "batch_size": batch_size,
+            "momentum": momentum,
+            "split_ratio": split_ratio,
+            "lambda_energy": lambda_energy,
+            "lambda_var": lambda_var,
+            "lambda_cov": lambda_cov,
+            "max_grad_norm": max_grad_norm,
+        }
+    )
 
     mp.set_start_method('spawn')
 
@@ -214,6 +249,7 @@ def main():
         lambda_energy=lambda_energy,
         lambda_var=lambda_var,
         lambda_cov=lambda_cov,
+        max_grad_norm=max_grad_norm,
     )
 
     save_model(trained_model, "final")

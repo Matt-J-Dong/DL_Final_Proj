@@ -191,7 +191,16 @@ class JEPA_Model(nn.Module):
             raise ValueError(f"Unknown distance function: {distance_function}")
         return energy
 
-    def train_step(self, states, actions, optimizer, momentum=0.99, distance_function="l2", lambda_energy=1.0, lambda_var=1.0, lambda_cov=1.0):
+    def train_step(self, 
+                   states, 
+                   actions, 
+                   optimizer, 
+                   momentum=0.99, 
+                   distance_function="l2", 
+                   lambda_energy=1.0, 
+                   lambda_var=1.0, 
+                   lambda_cov=1.0,
+                   max_grad_norm=1.0):
         """
         Perform a single training step.
 
@@ -222,7 +231,7 @@ class JEPA_Model(nn.Module):
         optimizer.zero_grad()
         loss.backward()
 
-        max_grad_norm = 0.1  # Set the maximum norm for gradients
+        # max_grad_norm = 0.1  # Set the maximum norm for gradients
         torch.nn.utils.clip_grad_norm_(self.parameters(), max_grad_norm)
 
         optimizer.step()
