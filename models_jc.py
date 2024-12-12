@@ -163,7 +163,7 @@ class JEPA_Model(nn.Module):
         cov_loss = cov_loss / (num_off_diagonal + epsilon)
         
         # Additional clipping to prevent extreme values
-        return torch.clamp(cov_loss, min=epsilon, max=10.0)
+        return torch.clamp(cov_loss, min=epsilon, max=5.0)
 
 
 
@@ -213,7 +213,7 @@ class JEPA_Model(nn.Module):
         target_encs = torch.stack(target_encs, dim=1)
 
         # Compute the loss function
-        lambda_energy, lambda_var, lambda_cov = 25.0, 25.0, 1.0  # Tunable hyperparameters
+        lambda_energy, lambda_var, lambda_cov = 5.0, 25.0, 1.0  # Tunable hyperparameters
         loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov)
 
 
