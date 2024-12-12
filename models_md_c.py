@@ -1,6 +1,7 @@
 from typing import List
 import torch
 import torch.nn as nn
+import numpy as np
 from torchvision.models import resnet50
 
 def build_mlp(layers_dims: List[int], dropout=0.0):
