@@ -64,9 +64,9 @@ def validate_model(model, val_loader, device, distance_function="l2", lambda_ene
             actions = batch.actions.to(device)
 
             # Normalize the states
-            locations = states[:, :, 0].view(-1, 2)  # Reshape to [B*T, 2]
+            locations = states[:, :, 0].reshape(-1, 2)  # Reshape to [B*T, 2]
             locations = normalizer.normalize_location(locations)  # Normalize
-            states[:, :, 0] = locations.view(states.size(0), states.size(1), 2)  # Reshape back to [B, T, 2]
+            states[:, :, 0] = locations.reshape(states.size(0), states.size(1), 2)  # Reshape back to [B, T, 2]
 
             # Simplify validation by reducing the temporal aspect of states/actions if applicable
             B, T, C, H, W = states.shape
@@ -133,9 +133,9 @@ def train_model(
             actions = batch.actions.to(device)
 
             # Normalize location data (reshape to match Normalizer input)
-            locations = states[:, :, 0].view(-1, 2)  # Reshape to [B*T, 2]
+            locations = states[:, :, 0].reshape(-1, 2)  # Reshape to [B*T, 2]
             locations = normalizer.normalize_location(locations)  # Normalize
-            states[:, :, 0] = locations.view(states.size(0), states.size(1), 2)  # Reshape back to [B, T, 2]
+            states[:, :, 0] = locations.reshape(states.size(0), states.size(1), 2)  # Reshape back to [B, T, 2]
 
             # Perform a training step
             loss = model.train_step(
