@@ -248,9 +248,51 @@ class JEPA_Model(nn.Module):
 
         return loss.item() if not debug else (loss.item(), energy.item(), var.item(), cov.item())
     
-    def compute_loss(self, pred_encs, target_encs, distance_function="l2", lambda_energy=1.0, lambda_var=1.0, lambda_cov=1.0, debug=False, min_variance=1.0):
+
+    def contrastive_loss(pred_encs, target_encs, margin=1.0):
         """
-        Compute the loss function.
+        Compute contrastive loss for embeddings.
+
+        Args:
+            pred_encs: [B, T, D] - Predicted embeddings
+            target_encs: [B, T, D] - Target embeddings
+            margin: float - Margin for contrastive loss
+
+        Returns:
+            loss: Contrastive loss value
+        """
+        # Flatten sequences for batch-wise comparison
+        pred_encs = pred_encs.view(-1, pred_encs.size(-1))  # [B*T, D]
+        target_encs = target_encs.view(-1, target_encs.size(-1))  # [B*T, D]
+
+        # Pairwise L2 distances
+        distances = torch.cdist(pred_encs, target_encs, p=2)  # [B*T, B*T]
+
+        # Positive pairs are on the diagonal
+        positive_pairs = distances.diag()  # [B*T]
+
+        # Negative pairs are all off-diagonal elements
+        negative_pairs = distances + torch.eye(distances.size(0), device=distances.device) * 1e9
+        closest_negative_pairs, _ = torch.min(negative_pairs, dim=1)  # Nearest negatives
+
+        # Contrastive loss with margin
+        loss = torch.mean(torch.relu(margin - positive_pairs + closest_negative_pairs))
+        return loss
+
+    
+    def compute_loss(self, 
+                 pred_encs, 
+                 target_encs, 
+                 distance_function="l2", 
+                 lambda_energy=1.0, 
+                 lambda_var=1.0, 
+                 lambda_cov=1.0, 
+                 lambda_contrastive=0.1, 
+                 margin=1.0, 
+                 debug=False, 
+                 min_variance=1.0):
+        """
+        Compute the loss function with contrastive loss added.
         """
         # Compute the energy function (distance between predicted and target states)
         energy = lambda_energy * self.compute_energy(pred_encs, target_encs, distance_function)
@@ -258,9 +300,14 @@ class JEPA_Model(nn.Module):
         # Add regularization terms
         var = lambda_var * self.variance_regularization(pred_encs, min_variance=min_variance)
         cov = lambda_cov * self.covariance_regularization(pred_encs)
-        loss = energy + var + cov
+
+        # Compute contrastive loss
+        contrastive = lambda_contrastive * contrastive_loss(pred_encs, target_encs, margin=margin)
+
+        # Total loss
+        loss = energy + var + cov + contrastive
         if not debug:
             return loss
         else:
-            # print(f'lambda_energy: {lambda_energy}, lambda_var: {lambda_var}, lambda_cov: {lambda_cov}')
-            return (loss, energy, var, cov)
+            return (loss, energy, var, cov, contrastive)
+
