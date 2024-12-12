@@ -179,7 +179,7 @@ def main():
             'batch_idx': -1,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict()
-        }, f"checkpoints/jepa_model_c_epoch_{epoch}_final_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth")
+        }, f"checkpoints/jepa_model_e_epoch_{epoch}_final_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth")
 
         # Early stopping
         if best_val_loss_normal is None:
