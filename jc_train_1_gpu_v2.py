@@ -47,7 +47,7 @@ def save_model(model, epoch, save_path="checkpoints"):
     torch.save(model.state_dict(), save_file)
     print(f"Model saved to {save_file}")
 
-def validate_model(model, val_loader, device, distance_function="l2"):
+def validate_model(model, val_loader, device, distance_function="l2", lambda_energy=1.0, lambda_var=1.0, lambda_cov=0.0):
     """
     Perform validation. Simplifies computation for speed by using a subset.
     """
@@ -79,7 +79,7 @@ def validate_model(model, val_loader, device, distance_function="l2"):
             target_encs = torch.stack(target_encs, dim=1)
 
             # Compute loss for the sampled subset
-            loss, _, var, cov = model.compute_loss(predicted_encs, target_encs, distance_function, debug=True)
+            loss, _, var, cov = model.compute_loss(predicted_encs, target_encs, distance_function, debug=True, lambda_energy=lambda_energy, lambda_var=lambda_var, lambda_cov=lambda_cov)
             val_loss += loss.item()
             var_culm += var
             cov_culm += cov
@@ -97,7 +97,10 @@ def train_model(
     learning_rate=1e-3,
     momentum=0.996,
     save_every=1,
-    distance_function="l2"
+    distance_function="l2",
+    lambda_energy=1.0,
+    lambda_var=1.0,
+    lambda_cov=0.0,
 ):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs)
@@ -118,6 +121,9 @@ def train_model(
                 optimizer=optimizer,
                 momentum=momentum,
                 distance_function=distance_function,
+                lambda_energy=lambda_energy,
+                lambda_var=lambda_var,
+                lambda_cov=lambda_cov,
             )
             epoch_loss += loss
 
@@ -128,7 +134,7 @@ def train_model(
                 save_model(model, f"{epoch}_batch_{batch_idx}")
 
                 # Perform validation
-                val_loss = validate_model(model, val_loader, device, distance_function)
+                val_loss = validate_model(model, val_loader, device, distance_function, lambda_energy, lambda_var, lambda_cov)
                 print(f"Validation Loss (Batch {batch_idx}): {val_loss:.4f}")
 
         avg_epoch_loss = epoch_loss / len(train_loader)
@@ -154,6 +160,7 @@ def main():
     learning_rate = 2e-4
     momentum = 0.996
     split_ratio = 0.9
+    lambda_energy, lambda_var, lambda_cov = 1.0, 1.0, 0.0  # Tunable hyperparameters
 
     mp.set_start_method('spawn')
 
@@ -171,6 +178,9 @@ def main():
         learning_rate=learning_rate,
         momentum=momentum,
         save_every=1,
+        lambda_energy=lambda_energy,
+        lambda_var=lambda_var,
+        lambda_cov=lambda_cov,
     )
 
     save_model(trained_model, "final")

@@ -189,7 +189,7 @@ class JEPA_Model(nn.Module):
             raise ValueError(f"Unknown distance function: {distance_function}")
         return energy
 
-    def train_step(self, states, actions, optimizer, momentum=0.99, distance_function="l2"):
+    def train_step(self, states, actions, optimizer, momentum=0.99, distance_function="l2", lambda_energy=1.0, lambda_var=1.0, lambda_cov=1.0):
         """
         Perform a single training step.
 
@@ -213,7 +213,6 @@ class JEPA_Model(nn.Module):
         target_encs = torch.stack(target_encs, dim=1)
 
         # Compute the loss function
-        lambda_energy, lambda_var, lambda_cov = 1.0, 1.0, 0.0  # Tunable hyperparameters
         loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov)
 
 
@@ -233,7 +232,7 @@ class JEPA_Model(nn.Module):
 
         return loss.item()
     
-    def compute_loss(self, pred_encs, target_encs, distance_function="l2", lambda_energy=0.0, lambda_var=0.0, lambda_cov=0.0, debug=False):
+    def compute_loss(self, pred_encs, target_encs, distance_function="l2", lambda_energy=1.0, lambda_var=1.0, lambda_cov=1.0, debug=False):
         """
         Compute the loss function.
         """
