@@ -91,7 +91,7 @@ class JEPA_Model(nn.Module):
         self.encoder = Encoder(output_dim=repr_dim, input_channels=2, dropout_prob=dropout_prob).to(device)
         
         # Add the expander after the encoder
-        # self.expander = Expander(input_dim=repr_dim, hidden_dim=1024, output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
+        self.expander = Expander(input_dim=repr_dim, hidden_dim=1024, output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
         
         self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim, hidden_dim=1024, dropout_prob=dropout_prob).to(device)
         
@@ -114,7 +114,7 @@ class JEPA_Model(nn.Module):
         pred_encs = []
 
         s_prev = self.encoder(init_state)
-        # s_prev = self.expander(s_prev)  # Pass encoder output through expander
+        s_prev = self.expander(s_prev)  # Pass encoder output through expander
         pred_encs.append(s_prev)
 
         for t in range(T_minus_one):
@@ -126,14 +126,14 @@ class JEPA_Model(nn.Module):
         pred_encs = torch.stack(pred_encs, dim=1)
         return pred_encs
 
-    def variance_regularization(self, states, epsilon=1e-4):
+    def variance_regularization(self, states, epsilon=1e-4, min_variance=1.0):
         if states.ndim == 3:
             states = states.view(-1, states.size(-1))
         
         std_x = torch.sqrt(states.var(dim=0) + epsilon)
         
         # Modify with a minimum variance threshold
-        min_variance = 1.0
+        min_variance = min_variance
         variance_loss = torch.mean(torch.relu(min_variance - std_x))
 
         
@@ -198,10 +198,11 @@ class JEPA_Model(nn.Module):
                    momentum=0.99, 
                    distance_function="l2", 
                    lambda_energy=1.0, 
-                   lambda_var=1.0, 
-                   lambda_cov=1.0,
+                   lambda_var=0.1, 
+                   lambda_cov=0.01,
                    debug=False,
-                   max_grad_norm=1.0):
+                   max_grad_norm=0.5,
+                   min_variance = 1.0):
         """
         Perform a single training step.
 
@@ -226,9 +227,9 @@ class JEPA_Model(nn.Module):
 
         # Compute the loss function
         if not debug:
-            loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov)
+            loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov, min_variance=min_variance)
         else:
-            loss, energy, var, cov = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov, debug=True)
+            loss, energy, var, cov = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov, min_variance=min_variance, debug=True)
 
 
         # Backpropagation
@@ -247,7 +248,7 @@ class JEPA_Model(nn.Module):
 
         return loss.item() if not debug else (loss.item(), energy.item(), var.item(), cov.item())
     
-    def compute_loss(self, pred_encs, target_encs, distance_function="l2", lambda_energy=1.0, lambda_var=1.0, lambda_cov=1.0, debug=False):
+    def compute_loss(self, pred_encs, target_encs, distance_function="l2", lambda_energy=1.0, lambda_var=1.0, lambda_cov=1.0, debug=False, min_variance=1.0):
         """
         Compute the loss function.
         """
@@ -255,7 +256,7 @@ class JEPA_Model(nn.Module):
         energy = lambda_energy * self.compute_energy(pred_encs, target_encs, distance_function)
 
         # Add regularization terms
-        var = lambda_var * self.variance_regularization(pred_encs)
+        var = lambda_var * self.variance_regularization(pred_encs, min_variance=min_variance)
         cov = lambda_cov * self.covariance_regularization(pred_encs)
         loss = energy + var + cov
         if not debug:

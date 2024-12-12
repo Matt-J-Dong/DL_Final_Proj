@@ -49,7 +49,7 @@ def save_model(model, epoch, save_path="checkpoints"):
     torch.save(model.state_dict(), save_file)
     print(f"Model saved to {save_file}")
 
-def validate_model(model, val_loader, device, distance_function="l2", lambda_energy=1.0, lambda_var=1.0, lambda_cov=0.0):
+def validate_model(model, val_loader, device, distance_function="l2", lambda_energy=1.0, lambda_var=1.0, lambda_cov=0.0, min_variance=1.0):
     """
     Perform validation. Simplifies computation for speed by using a subset.
     """
@@ -103,6 +103,7 @@ def validate_model(model, val_loader, device, distance_function="l2", lambda_ene
                 lambda_energy=lambda_energy,
                 lambda_var=lambda_var,
                 lambda_cov=lambda_cov,
+                min_variance=min_variance,
             )
             val_loss += loss.item()
             var_culm += var
@@ -126,6 +127,7 @@ def train_model(
     lambda_var=1.0,
     lambda_cov=0.0,
     max_grad_norm=1.0,
+    min_variance=1.0,
 ):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs)
@@ -161,6 +163,7 @@ def train_model(
                 lambda_cov=lambda_cov,
                 debug=True,
                 max_grad_norm=max_grad_norm,
+                min_variance=min_variance,
             )
             epoch_loss += loss
 
@@ -180,7 +183,7 @@ def train_model(
                 save_model(model, f"{epoch}_batch_{batch_idx}")
 
                 # Perform validation
-                val_loss = validate_model(model, val_loader, device, distance_function, lambda_energy, lambda_var, lambda_cov)
+                val_loss = validate_model(model, val_loader, device, distance_function, lambda_energy, lambda_var, lambda_cov, min_variance=min_variance)
                 print(f"Validation Loss (Batch {batch_idx}): {val_loss:.4f}")
 
         avg_epoch_loss = epoch_loss / len(train_loader)
@@ -194,6 +197,7 @@ def train_model(
 
             # Perform validation at the end of each epoch
             val_loss = validate_model(model, val_loader, device, distance_function)
+            wandb.log({"val_loss": val_loss})
             print(f"Validation Loss (Epoch {epoch}): {val_loss:.4f}")
 
     print("Training completed.")
@@ -207,7 +211,8 @@ def main():
     momentum = 0.996
     split_ratio = 0.9
     lambda_energy, lambda_var, lambda_cov = 1.0, 0.0, 0.0  # Tunable hyperparameters
-    max_grad_norm = 0.1
+    max_grad_norm = 0.5
+    min_variance = 0.1
     
     wandb.init(
         # set the wandb project where this run will be logged
@@ -227,6 +232,7 @@ def main():
             "lambda_var": lambda_var,
             "lambda_cov": lambda_cov,
             "max_grad_norm": max_grad_norm,
+            "min_variance": min_variance,
         }
     )
 
@@ -250,6 +256,7 @@ def main():
         lambda_var=lambda_var,
         lambda_cov=lambda_cov,
         max_grad_norm=max_grad_norm,
+        min_variance=min_variance,
     )
 
     save_model(trained_model, "final")
