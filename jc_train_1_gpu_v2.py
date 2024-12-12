@@ -184,6 +184,7 @@ def train_model(
 
                 # Perform validation
                 val_loss = validate_model(model, val_loader, device, distance_function, lambda_energy, lambda_var, lambda_cov, min_variance=min_variance)
+                wandb.log({"val_loss": val_loss})
                 print(f"Validation Loss (Batch {batch_idx}): {val_loss:.4f}")
 
         avg_epoch_loss = epoch_loss / len(train_loader)
