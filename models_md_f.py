@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 class SimpleCNN_Encoder(nn.Module):
     def __init__(self, output_dim=256, input_channels=2):
