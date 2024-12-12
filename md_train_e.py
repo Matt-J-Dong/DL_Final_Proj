@@ -207,7 +207,7 @@ if __name__ == "__main__":
             "probe_lr": {"values": [0.0005, 0.002, 0.008]},
             "lambda_cov": {"values": [0.1, 0.4, 0.7]},
             "learning_rate": {"values": [5e-4, 1e-3, 5e-3]},
-            "dropout": {"values": [0.0]}  # You can adjust this if needed
+            "dropout": {"values": [0.0]}
         }
     }
 
