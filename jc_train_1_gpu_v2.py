@@ -136,7 +136,7 @@ def train_model(
 
             # Normalize location data (reshape to match Normalizer input)
             locations = states[:, :, 0]  # Extract the 0th channel
-            print(f"Shape of locations before reshaping: {locations.shape}")  # Debugging
+            # print(f"Shape of locations before reshaping: {locations.shape}")  # Debugging
             locations = locations.reshape(-1, 2)  # Reshape to match normalization input
             states[:, :, 0] = normalizer.normalize_location(locations).reshape(states[:, :, 0].shape)
 
