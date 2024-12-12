@@ -141,16 +141,29 @@ class JEPA_Model(nn.Module):
         if states.ndim == 3:
             states = states.view(-1, states.size(-1))
         
-        batch_size, dim = states.size()
+        # Center the states
         states = states - states.mean(dim=0)
         
-        # Covariance matrix computation
-        cov_matrix = (states.t() @ states) / (batch_size - 1)
+        # Compute covariance matrix
+        cov_matrix = torch.matmul(states.t(), states) / (states.size(0) - 1)
         
-        # Off-diagonal covariance penalty
-        cov_loss = torch.sum(cov_matrix.pow(2)) - torch.sum(torch.diag(cov_matrix).pow(2))
+        # Remove diagonal (we only care about off-diagonal correlations)
+        off_diagonal = cov_matrix.clone()
+        torch.diagonal(off_diagonal)[:] = 0
         
-        return cov_loss / dim
+        # Compute off-diagonal covariance loss
+        # Use a more aggressive penalty for off-diagonal elements
+        cov_loss = torch.sum(off_diagonal.pow(2))
+        
+        # Normalize by the number of off-diagonal elements
+        dim = states.size(1)
+        num_off_diagonal = dim * (dim - 1)
+        
+        # Add small epsilon to prevent division by zero
+        cov_loss = cov_loss / (num_off_diagonal + epsilon)
+        
+        # Additional clipping to prevent extreme values
+        return torch.clamp(cov_loss, min=epsilon, max=10.0)
 
 
 
@@ -200,7 +213,7 @@ class JEPA_Model(nn.Module):
         target_encs = torch.stack(target_encs, dim=1)
 
         # Compute the loss function
-        lambda_energy, lambda_var, lambda_cov = 1.0, 25.0, 1.0  # Tunable hyperparameters
+        lambda_energy, lambda_var, lambda_cov = 1.0, 25.0, 0.1  # Tunable hyperparameters
         loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov)
 
 
