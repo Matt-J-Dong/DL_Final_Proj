@@ -119,18 +119,15 @@ class JEPA_Model(nn.Module):
         Compute contrastive loss using InfoNCE.
         """
         # Normalize embeddings
-        predicted_norm = nn.functional.normalize(predicted_encs, dim=-1)
-        target_norm = nn.functional.normalize(target_encs, dim=-1)
+        B, T, D = predicted_encs.shape
+        predicted_norm = nn.functional.normalize(predicted_encs, dim=-1).view(-1, D)  # (B*T, D)
+        target_norm = nn.functional.normalize(target_encs, dim=-1).view(-1, D)        # (B*T, D)
 
         # Compute similarity matrix
-        similarity_matrix = torch.matmul(predicted_norm, target_norm.transpose(-1, -2)) / temperature
+        similarity_matrix = torch.matmul(predicted_norm, target_norm.transpose(-1, -2)) / temperature  # (B*T, B*T)
 
         # Create labels for contrastive prediction (diagonal elements are positives)
-        batch_size, T, _ = similarity_matrix.shape
-        labels = torch.arange(batch_size * T).to(predicted_encs.device)
-
-        # Flatten the similarity matrix
-        similarity_matrix = similarity_matrix.view(batch_size * T, -1)
+        labels = torch.arange(B * T).to(predicted_encs.device)  # (B*T)
 
         # Compute cross-entropy loss
         contrastive_loss = nn.CrossEntropyLoss()(similarity_matrix, labels)

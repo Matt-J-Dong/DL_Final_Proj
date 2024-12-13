@@ -8,7 +8,7 @@ import glob
 import torch.multiprocessing as mp
 
 from dataset import create_wall_dataloader
-from models_md_g import JEPA_Model  # Updated import to models_md_c
+from models_md_g import JEPA_Model  # Updated import to models_md_g
 from evaluator_md import ProbingEvaluator, ProbingConfig
 from dotenv import load_dotenv
 import wandb
@@ -321,6 +321,7 @@ def main():
         momentum=momentum,
         save_every=1,
         train_sampler=train_sampler,
+        distance_function=distance_function,
         dropout=dropout,
         lambda_cov=lambda_cov,
     )
