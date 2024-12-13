@@ -240,7 +240,7 @@ class JEPA_Model(nn.Module):
                                      margin=margin,
                                      min_variance=min_variance)
         else:
-            loss, energy, var, cov = self.compute_loss(pred_encs, 
+            loss, energy, var, cov, contrastive = self.compute_loss(pred_encs, 
                                                        target_encs, 
                                                        distance_function, 
                                                        lambda_energy, 
@@ -266,7 +266,7 @@ class JEPA_Model(nn.Module):
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
 
-        return loss.item() if not debug else (loss.item(), energy.item(), var.item(), cov.item())
+        return loss.item() if not debug else (loss.item(), energy.item(), var.item(), cov.item(), contrastive.item())
     
 
     def contrastive_loss(self, pred_encs, target_encs, margin=1.0):
