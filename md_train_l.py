@@ -198,7 +198,7 @@ def train_model(
 
     best_val_loss_normal = None
     worse_count = 0
-    patience = 4
+    patience = 2
     last_pred_encs = None
 
     for epoch in range(start_epoch, num_epochs + 1):
