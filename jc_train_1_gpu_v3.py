@@ -131,10 +131,11 @@ def main():
         "lambda_energy": 1.0,
         "lambda_var": 0.1,
         "lambda_cov": 0.01,
-        "max_grad_norm": 0.5,
+        "max_grad_norm": 1.0,
         "min_variance": 1.0,
         "save_every": 1,
         'margin': 1.0,
+        'lambda_contrastive': 0.05,
     }
 
     wandb.init(
