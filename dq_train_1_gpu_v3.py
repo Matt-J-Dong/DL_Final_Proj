@@ -5,7 +5,7 @@ from tqdm.auto import tqdm
 import os
 from torch.utils.data import random_split, DataLoader
 from dataset import create_wall_dataloader
-from models_dq_b import JEPA_Model
+from dq_model import JEPA_Model
 import torch.multiprocessing as mp
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from normalizer import Normalizer
