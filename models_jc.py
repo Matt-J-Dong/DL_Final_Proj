@@ -282,8 +282,8 @@ class JEPA_Model(nn.Module):
             loss: Contrastive loss value
         """
         # Flatten sequences for batch-wise comparison
-        pred_encs = pred_encs.view(-1, pred_encs.size(-1))  # [B*T, D]
-        target_encs = target_encs.view(-1, target_encs.size(-1))  # [B*T, D]
+        pred_encs = pred_encs.reshape(-1, pred_encs.size(-1))  # [B*T, D]
+        target_encs = target_encs.reshape(-1, target_encs.size(-1))  # [B*T, D]
 
         # Pairwise L2 distances
         distances = torch.cdist(pred_encs, target_encs, p=2)  # [B*T, B*T]
