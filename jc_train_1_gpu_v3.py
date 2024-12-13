@@ -46,7 +46,7 @@ class Trainer:
 
     def validate_model(self, model, val_loader):
         model.eval()
-        val_loss, var_culm, cov_culm = 0.0, 0.0, 0.0
+        val_loss, var_culm, cov_culm, contra_culm = 0.0, 0.0, 0.0, 0.0
 
         with torch.no_grad():
             for batch in tqdm(val_loader, desc="Validating", leave=False):
@@ -56,12 +56,13 @@ class Trainer:
 
                 target_encs = torch.stack([model.target_encoder(states[:, t]) for t in range(states.size(1))], dim=1)
 
-                loss, _, var, cov = model.compute_loss(
+                loss, _, var, cov, _ = model.compute_loss(
                     pred_encs, target_encs, debug=True, **self.config
                 )
                 val_loss += loss.item()
                 var_culm += var
                 cov_culm += cov
+                # contra_culm += contra
 
         print(f"Validation Variance: {var_culm / len(val_loader)}, Covariance: {cov_culm / len(val_loader)}")
         return val_loss / len(val_loader)
@@ -81,7 +82,7 @@ class Trainer:
             for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
                 states, actions = batch.states.to(self.device), batch.actions.to(self.device)
 
-                loss, e_loss, var_loss, cov_loss = model.train_step(
+                loss, e_loss, var_loss, cov_loss, contra_loss = model.train_step(
                     states=states,
                     actions=actions,
                     optimizer=optimizer,
@@ -90,8 +91,12 @@ class Trainer:
                 )
                 epoch_loss += loss
 
-                if batch_idx % 25 == 0:
-                    wandb.log({"loss": loss, "energy_loss": e_loss, "variance_loss": var_loss, "covariance_loss": cov_loss})
+                if batch_idx % 10 == 0:
+                    wandb.log({"loss": loss, 
+                               "energy_loss": e_loss, 
+                               "variance_loss": var_loss, 
+                               "covariance_loss": cov_loss,
+                               "contrastive_loss": contra_loss})
 
                 if batch_idx % 100 == 0:
                     print(f"Epoch [{epoch}/{self.config['num_epochs']}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}")
