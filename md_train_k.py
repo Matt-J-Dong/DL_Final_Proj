@@ -323,6 +323,7 @@ def main():
     model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
     model.to(device)
 
+    distance_function="l2"
     trained_model = train_model(
         device=device,
         model=model,
