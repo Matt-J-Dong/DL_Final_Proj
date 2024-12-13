@@ -19,7 +19,7 @@ class Encoder(nn.Module):
     def __init__(self, output_dim=256, input_channels=2, dropout_prob=0.1):
         super(Encoder, self).__init__()
         # Load ResNet-18 without pretrained weights
-        resnet = resnet18(pretrained=False)
+        resnet = resnet50(pretrained=False)
 
         # Modify the first convolutional layer to accept the required input channels
         resnet.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
