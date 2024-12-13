@@ -129,13 +129,13 @@ def main():
         "momentum": 0.996,
         "split_ratio": 0.9,
         "lambda_energy": 1.0,
-        "lambda_var": 1.0,
-        "lambda_cov": 0.01,
+        "lambda_var": 0.0,
+        "lambda_cov": 0.0,
         "max_grad_norm": 1.0,
         "min_variance": 1.0,
         "save_every": 1,
         'margin': 0.5,
-        'lambda_contrastive': 0.05,
+        'lambda_contrastive': 0.1,
         'distance_function': 'l2',
     }
 
