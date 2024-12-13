@@ -269,6 +269,7 @@ def main():
     }
     }
     device = get_device()
+    distance_function="l2"
 
     # Hyperparameters from wandb.config (sweep)
     dropout = wandb.config.get("dropout", 0.0)
