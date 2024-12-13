@@ -264,7 +264,7 @@ def train_model(
             save_model(model, optimizer, epoch, -1, learning_rate, dropout, lambda_cov, probe_lr)
 
 def main():
-    wandb.init(project="my_jepa_project_sweep_h_margin", config={
+    wandb.init(project="my_jepa_project_sweep_m_margin", config={
         "method": "margin_contrastive"
     })  # Updated project name to reflect version 'h' and method
     sweep_config = {
@@ -321,6 +321,7 @@ def main():
     model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
     model.to(device)
 
+    distance_function="l2"
     trained_model = train_model(
         device=device,
         model=model,
