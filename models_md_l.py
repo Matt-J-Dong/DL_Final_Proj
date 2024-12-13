@@ -148,9 +148,6 @@ class JEPA_Model(nn.Module):
         with torch.no_grad():
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
-            dummy_matrix = torch.rand(1024, 1024, device=device)
-            for _ in range(5):  # Perform the computation 5 times
-                dummy_result = torch.matmul(dummy_matrix, dummy_matrix)
 
         # Return energy loss and regularization loss
         return energy.mean().item(), energy_reg.item(), loss.item(), pred_encs

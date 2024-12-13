@@ -1,4 +1,4 @@
-# md_train_h.py
+# md_train_k.py
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -43,7 +43,7 @@ def save_model(model, optimizer, epoch, batch_idx, learning_rate, dropout, lambd
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
-    # Include probe_lr and version 'h' in filename
+    # Include probe_lr and version 'k' in filename
     if batch_idx == -1:
         save_file = os.path.join(
             save_path,
@@ -130,7 +130,7 @@ def train_model(
 
     best_val_loss_normal = None
     worse_count = 0
-    patience = 4
+    patience = 2
     last_pred_encs = None
 
     for epoch in range(start_epoch, num_epochs + 1):
@@ -323,6 +323,7 @@ def main():
     model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
     model.to(device)
 
+    distance_function="l2"
     trained_model = train_model(
         device=device,
         model=model,

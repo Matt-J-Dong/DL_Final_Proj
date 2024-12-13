@@ -97,17 +97,29 @@ class JEPA_Model(nn.Module):
         energy = ((predicted_encs - target_encs) ** 2).sum(dim=-1).mean(dim=-1)  # (B)
         return energy
 
-    def compute_energy_regularization(self, energy, target_average=1.0, lambda_reg=0.5):
+    def compute_margin_contrastive_loss(self, energy, labels, margin=1.0):
         """
-        Compute regularization loss to prevent energy collapse.
-        Encourages the average energy to be close to target_average.
+        Compute margin-based contrastive loss.
+        Args:
+            energy (torch.Tensor): Energy loss per sample (B)
+            labels (torch.Tensor): Binary labels (B), 0 for good, 1 for bad
+            margin (float): Margin for contrastive loss
+        Returns:
+            torch.Tensor: Contrastive loss
         """
-        reg_loss = torch.mean(torch.relu(target_average - energy))
-        return lambda_reg * reg_loss
+        # For good inputs (label=0), minimize energy
+        loss_pos = (1 - labels) * energy  # (B)
 
-    def train_step(self, states, actions, labels, optimizer, momentum=0.99, distance_function="l2", add_noise=False, lambda_cov=0.5, target_average=1.0):
+        # For bad inputs (label=1), ensure energy > margin
+        loss_neg = labels * torch.relu(margin - energy)  # (B)
+
+        # Total contrastive loss
+        contrastive_loss = loss_pos + loss_neg  # (B)
+        return contrastive_loss.mean()
+
+    def train_step(self, states, actions, labels, optimizer, momentum=0.99, distance_function="l2", add_noise=False, lambda_cov=0.5, margin=1.0):
         """
-        Modified train_step to include energy-based regularization.
+        Modified train_step to handle margin-based contrastive loss.
         Args:
             labels (torch.Tensor): Binary labels indicating good (0) or bad (1) inputs.
         """
@@ -134,12 +146,12 @@ class JEPA_Model(nn.Module):
         # Compute energy loss
         energy = self.compute_energy(pred_encs, target_encs, distance_function)  # (B)
 
-        # Compute energy-based regularization
-        energy_reg = self.compute_energy_regularization(energy, target_average=target_average)
+        # Compute margin-based contrastive loss
+        contrastive_loss = self.compute_margin_contrastive_loss(energy, labels, margin)
 
         # Total loss with regularizations
         lambda_var = 0.1
-        loss = energy.mean() + energy_reg + lambda_var * self.variance_regularization(pred_encs) + lambda_cov * self.covariance_regularization(pred_encs)
+        loss = contrastive_loss + lambda_var * self.variance_regularization(pred_encs) + lambda_cov * self.covariance_regularization(pred_encs)
 
         optimizer.zero_grad()
         loss.backward()
@@ -148,9 +160,6 @@ class JEPA_Model(nn.Module):
         with torch.no_grad():
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
-            dummy_matrix = torch.rand(1024, 1024, device=device)
-            for _ in range(5):  # Perform the computation 5 times
-                dummy_result = torch.matmul(dummy_matrix, dummy_matrix)
 
-        # Return energy loss and regularization loss
-        return energy.mean().item(), energy_reg.item(), loss.item(), pred_encs
+        # Return energy loss and contrastive loss
+        return energy.mean().item(), contrastive_loss.item(), loss.item(), pred_encs
