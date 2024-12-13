@@ -125,6 +125,7 @@ def main():
         "max_grad_norm": 0.5,
         "min_variance": 0.1,
         "save_every": 1,
+        'margin': 1.0,
     }
 
     wandb.init(

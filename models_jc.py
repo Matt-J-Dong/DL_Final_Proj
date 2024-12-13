@@ -269,7 +269,7 @@ class JEPA_Model(nn.Module):
         return loss.item() if not debug else (loss.item(), energy.item(), var.item(), cov.item())
     
 
-    def contrastive_loss(pred_encs, target_encs, margin=1.0):
+    def contrastive_loss(self, pred_encs, target_encs, margin=1.0):
         """
         Compute contrastive loss for embeddings.
 
