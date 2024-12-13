@@ -8,15 +8,17 @@ import glob
 import torch.multiprocessing as mp
 
 from dataset import create_wall_dataloader
-from models_md_h import JEPA_Model  # Updated import to models_md_h
+from models_md_h import JEPA_Model  # Ensure this import is correct
 from evaluator_md import ProbingEvaluator, ProbingConfig
 from dotenv import load_dotenv
 import wandb
 
+# Load environment variables
 load_dotenv()
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")
 os.environ["WANDB_API_KEY"] = WANDB_API_KEY
-wandb.login(key=WANDB_API_KEY)
+
+# Define helper functions
 
 def get_device():
     """Set the device for single-GPU training."""
@@ -264,44 +266,34 @@ def train_model(
         if epoch % save_every == 0:
             save_model(model, optimizer, epoch, -1, learning_rate, dropout, lambda_cov, probe_lr)
 
-def main():
-    wandb.init(project="YOUR_PROJECT_NAME", config={
-        "method": "energy_regularization"
-    })  # Replace "YOUR_PROJECT_NAME" with your actual project name
-
-    sweep_config = {
-        "method": "grid",
-        "parameters": {
-            "momentum": {"values": [0.9, 0.99]},
-            "batch_size": {"values": [128, 512]},
-            "probe_lr": {"values": [0.0005, 0.002, 0.008]},
-            "lambda_cov": {"values": [0.4, 0.7]},
-            "learning_rate": {"values": [5e-5, 1e-4, 5e-4]},
-            "dropout": {"values": [0.0]},
-            "target_average": {"values": [1.0, 1.5, 2.0]}  # Added target_average hyperparameter
-        }
-    }
-
-    sweep_id = wandb.sweep(sweep_config, project="YOUR_PROJECT_NAME")  # Replace "YOUR_PROJECT_NAME" accordingly
-    wandb.agent(sweep_id, function=run_training)
-
 def run_training():
-    wandb.init()
+    """
+    This function is called by each sweep agent. It initializes a wandb run,
+    retrieves hyperparameters from wandb.config, and starts the training process.
+    """
+    # Initialize a new wandb run
+    wandb.init(project="my_jepa_project_sweep_h_reg", config={
+        "method": "energy_regularization"
+    })  # Replace "my_jepa_project_sweep_h_reg" with your actual project name
+
+    # Retrieve hyperparameters from wandb.config
+    config = wandb.config
+
+    dropout = config.get("dropout", 0.0)
+    learning_rate = config.get("learning_rate", 1e-3)
+    lambda_cov = config.get("lambda_cov", 0.1)
+    momentum = config.get("momentum", 0.99)
+    batch_size = config.get("batch_size", 64)
+    probe_lr = config.get("probe_lr", 0.0002)
+    num_epochs = config.get("epochs", 10)
+    target_average = config.get("target_average", 1.0)
 
     device = get_device()
 
-    # Hyperparameters from wandb.config (sweep)
-    dropout = wandb.config.get("dropout", 0.0)
-    learning_rate = wandb.config.get("learning_rate", 1e-3)
-    lambda_cov = wandb.config.get("lambda_cov", 0.1)
-    momentum = wandb.config.get("momentum", 0.99)
-    batch_size = wandb.config.get("batch_size", 64)
-    probe_lr = wandb.config.get("probe_lr", 0.0002)
-    num_epochs = wandb.config.get("epochs", 10)
-    target_average = wandb.config.get("target_average", 1.0)
-
+    # Load training data
     train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
 
+    # Load probing datasets
     data_path = "/scratch/DL24FA"
     probe_train_ds = create_wall_dataloader(
         data_path=f"{data_path}/probe_normal/train",
@@ -327,9 +319,11 @@ def run_training():
         batch_size=batch_size
     )
 
+    # Initialize the model
     model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
     model.to(device)
 
+    # Start training
     train_model(
         device=device,
         model=model,
@@ -348,11 +342,36 @@ def run_training():
         target_average=target_average
     )
 
-    # Final save
+    # Final model save after training completes
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
     save_model(model, optimizer, num_epochs, -1, learning_rate, dropout, lambda_cov, probe_lr)
 
+    # Finish the wandb run
     wandb.finish()
+
+def main():
+    """
+    Main function to set up the WandB sweep and start the agents.
+    """
+    # Define the sweep configuration
+    sweep_config = {
+        "method": "grid",
+        "parameters": {
+            "momentum": {"values": [0.9, 0.99]},
+            "batch_size": {"values": [128, 512]},
+            "probe_lr": {"values": [0.0005, 0.002, 0.008]},
+            "lambda_cov": {"values": [0.4, 0.7]},
+            "learning_rate": {"values": [5e-5, 1e-4, 5e-4]},
+            "dropout": {"values": [0.0]},
+            "target_average": {"values": [1.0, 1.5, 2.0]}  # Added target_average hyperparameter
+        }
+    }
+
+    # Initialize the sweep
+    sweep_id = wandb.sweep(sweep_config, project="my_jepa_project_sweep_h_reg")  # Replace with your actual project name
+
+    # Start the sweep agent
+    wandb.agent(sweep_id, function=run_training)
 
 if __name__ == "__main__":
     main()
