@@ -264,87 +264,95 @@ def train_model(
         if epoch % save_every == 0:
             save_model(model, optimizer, epoch, -1, learning_rate, dropout, lambda_cov, probe_lr)
 
-    def main():
-        wandb.init(project="my_jepa_project_sweep_h_reg", config={
-            "method": "energy_regularization"
-        })  # Updated project name to reflect version 'h' and method
-        sweep_config = {
+def main():
+    wandb.init(project="YOUR_PROJECT_NAME", config={
+        "method": "energy_regularization"
+    })  # Replace "YOUR_PROJECT_NAME" with your actual project name
+
+    sweep_config = {
         "method": "grid",
         "parameters": {
             "momentum": {"values": [0.9, 0.99]},
-            "batch_size": {"values": [128,512]},
+            "batch_size": {"values": [128, 512]},
             "probe_lr": {"values": [0.0005, 0.002, 0.008]},
             "lambda_cov": {"values": [0.4, 0.7]},
             "learning_rate": {"values": [5e-5, 1e-4, 5e-4]},
             "dropout": {"values": [0.0]},
             "target_average": {"values": [1.0, 1.5, 2.0]}  # Added target_average hyperparameter
         }
-        }
-        device = get_device()
+    }
 
-        # Hyperparameters from wandb.config (sweep)
-        dropout = wandb.config.get("dropout", 0.0)
-        learning_rate = wandb.config.get("learning_rate", 1e-3)
-        lambda_cov = wandb.config.get("lambda_cov", 0.1)
-        momentum = wandb.config.get("momentum", 0.99)
-        batch_size = wandb.config.get("batch_size", 64)
-        probe_lr = wandb.config.get("probe_lr", 0.0002)
-        num_epochs = wandb.config.get("epochs", 10)
-        target_average = wandb.config.get("target_average", 1.0)
+    sweep_id = wandb.sweep(sweep_config, project="YOUR_PROJECT_NAME")  # Replace "YOUR_PROJECT_NAME" accordingly
+    wandb.agent(sweep_id, function=run_training)
 
-        train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
+def run_training():
+    wandb.init()
 
-        data_path = "/scratch/DL24FA"
-        probe_train_ds = create_wall_dataloader(
-            data_path=f"{data_path}/probe_normal/train",
-            probing=True,
-            device=device,
-            train=True,
-            batch_size=batch_size
-        )
+    device = get_device()
 
-        probe_val_normal_ds = create_wall_dataloader(
-            data_path=f"{data_path}/probe_normal/val",
-            probing=True,
-            device=device,
-            train=False,
-            batch_size=batch_size
-        )
+    # Hyperparameters from wandb.config (sweep)
+    dropout = wandb.config.get("dropout", 0.0)
+    learning_rate = wandb.config.get("learning_rate", 1e-3)
+    lambda_cov = wandb.config.get("lambda_cov", 0.1)
+    momentum = wandb.config.get("momentum", 0.99)
+    batch_size = wandb.config.get("batch_size", 64)
+    probe_lr = wandb.config.get("probe_lr", 0.0002)
+    num_epochs = wandb.config.get("epochs", 10)
+    target_average = wandb.config.get("target_average", 1.0)
 
-        probe_val_wall_ds = create_wall_dataloader(
-            data_path=f"{data_path}/probe_wall/val",
-            probing=True,
-            device=device,
-            train=False,
-            batch_size=batch_size
-        )
+    train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
 
-        model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
-        model.to(device)
+    data_path = "/scratch/DL24FA"
+    probe_train_ds = create_wall_dataloader(
+        data_path=f"{data_path}/probe_normal/train",
+        probing=True,
+        device=device,
+        train=True,
+        batch_size=batch_size
+    )
 
-        trained_model = train_model(
-            device=device,
-            model=model,
-            train_loader=train_loader,
-            probe_train_ds=probe_train_ds,
-            probe_val_normal_ds=probe_val_normal_ds,
-            probe_val_wall_ds=probe_val_wall_ds,
-            num_epochs=num_epochs,
-            learning_rate=learning_rate,
-            momentum=momentum,
-            save_every=1,
-            train_sampler=train_sampler,
-            distance_function=distance_function,
-            dropout=dropout,
-            lambda_cov=lambda_cov,
-            target_average=target_average
-        )
+    probe_val_normal_ds = create_wall_dataloader(
+        data_path=f"{data_path}/probe_normal/val",
+        probing=True,
+        device=device,
+        train=False,
+        batch_size=batch_size
+    )
 
-        # Final save
-        optimizer = optim.Adam(trained_model.parameters(), lr=learning_rate, weight_decay=1e-4)
-        save_model(trained_model, optimizer, num_epochs, -1, learning_rate, dropout, lambda_cov, probe_lr)
+    probe_val_wall_ds = create_wall_dataloader(
+        data_path=f"{data_path}/probe_wall/val",
+        probing=True,
+        device=device,
+        train=False,
+        batch_size=batch_size
+    )
 
-        wandb.finish()
+    model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
+    model.to(device)
 
-    if __name__ == "__main__":
-        main()
+    train_model(
+        device=device,
+        model=model,
+        train_loader=train_loader,
+        probe_train_ds=probe_train_ds,
+        probe_val_normal_ds=probe_val_normal_ds,
+        probe_val_wall_ds=probe_val_wall_ds,
+        num_epochs=num_epochs,
+        learning_rate=learning_rate,
+        momentum=momentum,
+        save_every=1,
+        train_sampler=train_sampler,
+        distance_function="l2",
+        dropout=dropout,
+        lambda_cov=lambda_cov,
+        target_average=target_average
+    )
+
+    # Final save
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+    save_model(model, optimizer, num_epochs, -1, learning_rate, dropout, lambda_cov, probe_lr)
+
+    wandb.finish()
+
+if __name__ == "__main__":
+    main()
