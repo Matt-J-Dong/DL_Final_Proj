@@ -156,7 +156,7 @@ class JEPA_Model(nn.Module):
         # energy = ((predicted_encs - target_encs) ** 2).sum(dim=-1).mean(dim=-1)  # (B, T)
 
         # For this method, we'll redefine compute_energy to return per-sample energy
-        energy = ((predicted_encs - target_encs) ** 2).sum(dim=-1).mean(dim=-1)  # (B)
+        energy = ((pred_encs - target_encs) ** 2).sum(dim=-1).mean(dim=-1)  # (B)
 
         # Compute BCE loss
         energy_logits = energy  # (B)
