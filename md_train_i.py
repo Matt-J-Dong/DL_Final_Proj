@@ -347,30 +347,30 @@ def train_model(
         # Finish the wandb run
         wandb.finish()
 
-    def main():
-        """
-        Main function to set up the WandB sweep and start the agents.
-        """
-        # Define the sweep configuration
-        sweep_config = {
-            "method": "grid",
-            "parameters": {
-                "momentum": {"values": [0.9, 0.99]},
-                "batch_size": {"values": [128, 512]},
-                "probe_lr": {"values": [0.0005, 0.002, 0.008]},
-                "lambda_cov": {"values": [0.4, 0.7]},
-                "learning_rate": {"values": [5e-5, 1e-4, 5e-4]},
-                "dropout": {"values": [0.0]},
-                "margin": {"values": [1.0, 1.5, 2.0]}  # Added margin hyperparameter
-            }
+def main():
+    """
+    Main function to set up the WandB sweep and start the agents.
+    """
+    # Define the sweep configuration
+    sweep_config = {
+        "method": "grid",
+        "parameters": {
+            "momentum": {"values": [0.9, 0.99]},
+            "batch_size": {"values": [128, 512]},
+            "probe_lr": {"values": [0.0005, 0.002, 0.008]},
+            "lambda_cov": {"values": [0.4, 0.7]},
+            "learning_rate": {"values": [5e-5, 1e-4, 5e-4]},
+            "dropout": {"values": [0.0]},
+            "margin": {"values": [1.0, 1.5, 2.0]}  # Added margin hyperparameter
         }
+    }
 
-        # Initialize the sweep
-        sweep_id = wandb.sweep(sweep_config, project="my_jepa_project_sweep_i_margin")  # Update project name as needed
+    # Initialize the sweep
+    sweep_id = wandb.sweep(sweep_config, project="my_jepa_project_sweep_i_margin")  # Update project name as needed
 
-        # Start the sweep agent
-        wandb.agent(sweep_id, function=run_training)
+    # Start the sweep agent
+    wandb.agent(sweep_id, function=run_training)
 
-    if __name__ == "__main__":
-        main()
+if __name__ == "__main__":
+    main()
 
