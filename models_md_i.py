@@ -105,36 +105,39 @@ class JEPA_Model(nn.Module):
         return torch.sum(off_diag ** 2)
 
     def compute_energy(self, predicted_encs, target_encs, distance_function="l2"):
-        if distance_function == "l2":
-            energy = torch.sum((predicted_encs - target_encs) ** 2) / (predicted_encs.size(0) * predicted_encs.size(1))
-        elif distance_function == "cosine":
-            cos = nn.CosineSimilarity(dim=-1)
-            energy = -torch.sum(cos(predicted_encs, target_encs)) / (predicted_encs.size(0) * predicted_encs.size(1))
-        else:
-            raise ValueError(f"Unknown distance function: {distance_function}")
+        # Compute per-sample energy
+        energy = ((predicted_encs - target_encs) ** 2).sum(dim=-1).mean(dim=-1)  # (B)
         return energy
 
-    def compute_contrastive_loss(self, predicted_encs, target_encs, temperature=0.1):
+    def compute_margin_contrastive_loss(self, energy, labels, margin=1.0):
         """
-        Compute contrastive loss using InfoNCE.
+        Compute margin-based contrastive loss.
+        Args:
+            energy (torch.Tensor): Energy loss per sample (B)
+            labels (torch.Tensor): Binary labels (B), 0 for good, 1 for bad
+            margin (float): Margin for contrastive loss
+        Returns:
+            torch.Tensor: Contrastive loss
         """
-        # Normalize embeddings
-        B, T, D = predicted_encs.shape
-        predicted_norm = nn.functional.normalize(predicted_encs, dim=-1).view(-1, D)  # (B*T, D)
-        target_norm = nn.functional.normalize(target_encs, dim=-1).view(-1, D)        # (B*T, D)
+        loss = torch.zeros_like(energy)
 
-        # Compute similarity matrix
-        similarity_matrix = torch.matmul(predicted_norm, target_norm.transpose(-1, -2)) / temperature  # (B*T, B*T)
+        # For good inputs (label=0), minimize energy
+        positive_mask = (labels == 0)
+        loss_pos = positive_mask.float() * energy
 
-        # Create labels for contrastive prediction (diagonal elements are positives)
-        labels = torch.arange(B * T).to(predicted_encs.device)  # (B*T)
+        # For bad inputs (label=1), ensure energy > margin
+        negative_mask = (labels == 1)
+        loss_neg = negative_mask.float() * torch.relu(margin - energy)
 
-        # Compute cross-entropy loss
-        contrastive_loss = nn.CrossEntropyLoss()(similarity_matrix, labels)
+        loss = loss_pos + loss_neg
+        return loss.mean()
 
-        return contrastive_loss
-
-    def train_step(self, states, actions, optimizer, momentum=0.99, distance_function="l2", add_noise=False, lambda_cov=0.5):
+    def train_step(self, states, actions, labels, optimizer, momentum=0.99, distance_function="l2", add_noise=False, lambda_cov=0.5, margin=1.0):
+        """
+        Modified train_step to handle margin-based contrastive loss.
+        Args:
+            labels (torch.Tensor): Binary labels indicating good (0) or bad (1) inputs.
+        """
         B, T, C, H, W = states.shape
 
         # Add noise if requested
@@ -156,14 +159,14 @@ class JEPA_Model(nn.Module):
         target_encs = torch.stack(target_encs, dim=1)
 
         # Compute energy loss
-        energy_loss = self.compute_energy(pred_encs, target_encs, distance_function)
+        energy = self.compute_energy(pred_encs, target_encs, distance_function)  # (B)
 
-        # Compute contrastive loss
-        contrastive_loss = self.compute_contrastive_loss(pred_encs, target_encs)
+        # Compute margin-based contrastive loss
+        contrastive_loss = self.compute_margin_contrastive_loss(energy, labels, margin)
 
         # Total loss with regularizations
         lambda_var = 0.1
-        loss = energy_loss + contrastive_loss + lambda_var * self.variance_regularization(pred_encs) + lambda_cov * self.covariance_regularization(pred_encs)
+        loss = contrastive_loss + lambda_var * self.variance_regularization(pred_encs) + lambda_cov * self.covariance_regularization(pred_encs)
 
         optimizer.zero_grad()
         loss.backward()
@@ -173,7 +176,8 @@ class JEPA_Model(nn.Module):
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
 
-        return energy_loss.item(), contrastive_loss.item(), loss.item(), pred_encs
+        # Return energy loss and contrastive loss
+        return energy.mean().item(), contrastive_loss.item(), loss.item(), pred_encs
 
 class Prober(torch.nn.Module):
     def __init__(

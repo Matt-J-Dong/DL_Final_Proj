@@ -105,36 +105,24 @@ class JEPA_Model(nn.Module):
         return torch.sum(off_diag ** 2)
 
     def compute_energy(self, predicted_encs, target_encs, distance_function="l2"):
-        if distance_function == "l2":
-            energy = torch.sum((predicted_encs - target_encs) ** 2) / (predicted_encs.size(0) * predicted_encs.size(1))
-        elif distance_function == "cosine":
-            cos = nn.CosineSimilarity(dim=-1)
-            energy = -torch.sum(cos(predicted_encs, target_encs)) / (predicted_encs.size(0) * predicted_encs.size(1))
-        else:
-            raise ValueError(f"Unknown distance function: {distance_function}")
+        # Compute per-sample energy
+        energy = ((predicted_encs - target_encs) ** 2).sum(dim=-1).mean(dim=-1)  # (B)
         return energy
 
-    def compute_contrastive_loss(self, predicted_encs, target_encs, temperature=0.1):
+    def compute_energy_regularization(self, energy, target_average=1.0, lambda_reg=0.5):
         """
-        Compute contrastive loss using InfoNCE.
+        Compute regularization loss to prevent energy collapse.
+        Encourages the average energy to be close to target_average.
         """
-        # Normalize embeddings
-        B, T, D = predicted_encs.shape
-        predicted_norm = nn.functional.normalize(predicted_encs, dim=-1).view(-1, D)  # (B*T, D)
-        target_norm = nn.functional.normalize(target_encs, dim=-1).view(-1, D)        # (B*T, D)
+        reg_loss = torch.mean(torch.relu(target_average - energy))
+        return lambda_reg * reg_loss
 
-        # Compute similarity matrix
-        similarity_matrix = torch.matmul(predicted_norm, target_norm.transpose(-1, -2)) / temperature  # (B*T, B*T)
-
-        # Create labels for contrastive prediction (diagonal elements are positives)
-        labels = torch.arange(B * T).to(predicted_encs.device)  # (B*T)
-
-        # Compute cross-entropy loss
-        contrastive_loss = nn.CrossEntropyLoss()(similarity_matrix, labels)
-
-        return contrastive_loss
-
-    def train_step(self, states, actions, optimizer, momentum=0.99, distance_function="l2", add_noise=False, lambda_cov=0.5):
+    def train_step(self, states, actions, labels, optimizer, momentum=0.99, distance_function="l2", add_noise=False, lambda_cov=0.5, target_average=1.0):
+        """
+        Modified train_step to include energy-based regularization.
+        Args:
+            labels (torch.Tensor): Binary labels indicating good (0) or bad (1) inputs.
+        """
         B, T, C, H, W = states.shape
 
         # Add noise if requested
@@ -156,14 +144,14 @@ class JEPA_Model(nn.Module):
         target_encs = torch.stack(target_encs, dim=1)
 
         # Compute energy loss
-        energy_loss = self.compute_energy(pred_encs, target_encs, distance_function)
+        energy = self.compute_energy(pred_encs, target_encs, distance_function)  # (B)
 
-        # Compute contrastive loss
-        contrastive_loss = self.compute_contrastive_loss(pred_encs, target_encs)
+        # Compute energy-based regularization
+        energy_reg = self.compute_energy_regularization(energy, target_average=target_average)
 
-        # Total loss with regularizations
+        # Total loss
         lambda_var = 0.1
-        loss = energy_loss + contrastive_loss + lambda_var * self.variance_regularization(pred_encs) + lambda_cov * self.covariance_regularization(pred_encs)
+        loss = energy.mean() + energy_reg + lambda_var * self.variance_regularization(pred_encs) + lambda_cov * self.covariance_regularization(pred_encs)
 
         optimizer.zero_grad()
         loss.backward()
@@ -173,7 +161,8 @@ class JEPA_Model(nn.Module):
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
 
-        return energy_loss.item(), contrastive_loss.item(), loss.item(), pred_encs
+        # Return energy loss and regularization loss
+        return energy.mean().item(), energy_reg.item(), loss.item(), pred_encs
 
 class Prober(torch.nn.Module):
     def __init__(

@@ -124,17 +124,19 @@ class Trainer:
 def main():
     config = {
         "batch_size": 512,
-        "num_epochs": 10,
-        "learning_rate": 2e-6,
+        "num_epochs": 20,
+        "learning_rate": 2e-4,
         "momentum": 0.996,
         "split_ratio": 0.9,
         "lambda_energy": 1.0,
-        "lambda_var": 0.1,
-        "lambda_cov": 0.01,
-        "max_grad_norm": 0.5,
+        "lambda_var": 0.0,
+        "lambda_cov": 0.0,
+        "max_grad_norm": 1.0,
         "min_variance": 1.0,
         "save_every": 1,
-        'margin': 1.0,
+        'margin': 0.5,
+        'lambda_contrastive': 0.1,
+        'distance_function': 'l2',
     }
 
     wandb.init(

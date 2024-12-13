@@ -114,27 +114,12 @@ class JEPA_Model(nn.Module):
             raise ValueError(f"Unknown distance function: {distance_function}")
         return energy
 
-    def compute_contrastive_loss(self, predicted_encs, target_encs, temperature=0.1):
+    def train_step(self, states, actions, labels, optimizer, momentum=0.99, distance_function="l2", add_noise=False, lambda_cov=0.5):
         """
-        Compute contrastive loss using InfoNCE.
+        Modified train_step to handle binary classification for energy loss.
+        Args:
+            labels (torch.Tensor): Binary labels indicating good (0) or bad (1) inputs.
         """
-        # Normalize embeddings
-        B, T, D = predicted_encs.shape
-        predicted_norm = nn.functional.normalize(predicted_encs, dim=-1).view(-1, D)  # (B*T, D)
-        target_norm = nn.functional.normalize(target_encs, dim=-1).view(-1, D)        # (B*T, D)
-
-        # Compute similarity matrix
-        similarity_matrix = torch.matmul(predicted_norm, target_norm.transpose(-1, -2)) / temperature  # (B*T, B*T)
-
-        # Create labels for contrastive prediction (diagonal elements are positives)
-        labels = torch.arange(B * T).to(predicted_encs.device)  # (B*T)
-
-        # Compute cross-entropy loss
-        contrastive_loss = nn.CrossEntropyLoss()(similarity_matrix, labels)
-
-        return contrastive_loss
-
-    def train_step(self, states, actions, optimizer, momentum=0.99, distance_function="l2", add_noise=False, lambda_cov=0.5):
         B, T, C, H, W = states.shape
 
         # Add noise if requested
@@ -156,14 +141,30 @@ class JEPA_Model(nn.Module):
         target_encs = torch.stack(target_encs, dim=1)
 
         # Compute energy loss
-        energy_loss = self.compute_energy(pred_encs, target_encs, distance_function)
+        energy_loss = self.compute_energy(pred_encs, target_encs, distance_function)  # Scalar
 
-        # Compute contrastive loss
-        contrastive_loss = self.compute_contrastive_loss(pred_encs, target_encs)
+        # Binary classification loss using energy loss
+        # Labels: 0 for good, 1 for bad
+        bce_loss = nn.BCEWithLogitsLoss()
+        energy_logits = energy_loss  # Assuming energy_loss is scalar per sample
+        # However, energy_loss is currently a scalar across the batch.
+        # To apply BCE, we need energy per sample. Adjust compute_energy accordingly.
+
+        # Modify compute_energy to return energy per sample
+        # Let's redefine compute_energy to compute energy per sample
+        # Update compute_energy:
+        # energy = ((predicted_encs - target_encs) ** 2).sum(dim=-1).mean(dim=-1)  # (B, T)
+
+        # For this method, we'll redefine compute_energy to return per-sample energy
+        energy = ((pred_encs - target_encs) ** 2).sum(dim=-1).mean(dim=-1)  # (B)
+
+        # Compute BCE loss
+        energy_logits = energy  # (B)
+        loss = bce_loss(energy_logits, labels.float())  # (B)
 
         # Total loss with regularizations
         lambda_var = 0.1
-        loss = energy_loss + contrastive_loss + lambda_var * self.variance_regularization(pred_encs) + lambda_cov * self.covariance_regularization(pred_encs)
+        loss = loss.mean() + lambda_var * self.variance_regularization(pred_encs) + lambda_cov * self.covariance_regularization(pred_encs)
 
         optimizer.zero_grad()
         loss.backward()
@@ -173,7 +174,8 @@ class JEPA_Model(nn.Module):
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
 
-        return energy_loss.item(), contrastive_loss.item(), loss.item(), pred_encs
+        # Return energy loss and BCE loss
+        return energy.mean().item(), loss.item(), pred_encs
 
 class Prober(torch.nn.Module):
     def __init__(

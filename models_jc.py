@@ -88,6 +88,10 @@ class JEPA_Model(nn.Module):
     def __init__(self, device="cuda", repr_dim=256, action_dim=2, dropout_prob=0.1):
         super(JEPA_Model, self).__init__()
         self.device = device
+        self.repr_dim = repr_dim
+        self.action_dim = action_dim
+        self.dropout_prob = dropout_prob
+
         self.encoder = Encoder(output_dim=repr_dim, input_channels=2, dropout_prob=dropout_prob).to(device)
         
         # Add the expander after the encoder
