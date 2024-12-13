@@ -136,6 +136,7 @@ def main():
         "save_every": 1,
         'margin': 0.5,
         'lambda_contrastive': 0.05,
+        'distance_function': 'cosine',
     }
 
     wandb.init(
