@@ -19,6 +19,7 @@ os.environ["WANDB_API_KEY"] = WANDB_API_KEY
 wandb.login(key=WANDB_API_KEY)
 
 def get_device():
+    """Set the device for single-GPU training."""
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -27,8 +28,7 @@ def get_device():
     return device
 
 def load_data(device, batch_size=64, is_distributed=False, subset_size=1000):
-    #data_path = "/scratch/DL24FA"
-    data_path = "./data/DL24FA"
+    data_path = "/scratch/DL24FA"
     train_loader = create_wall_dataloader(
         data_path=f"{data_path}/train",
         probing=False,
@@ -142,6 +142,10 @@ def train_model(
             states = batch.states.to(device)
             actions = batch.actions.to(device)
 
+            # Dummy GPU usage: a small random matmul to keep GPU busy
+            dummy_tensor = torch.randn(256, 256, device=device)
+            _ = dummy_tensor @ dummy_tensor  # just to keep GPU usage up
+
             loss_value, pred_encs = model.train_step(
                 states=states,
                 actions=actions,
@@ -165,7 +169,7 @@ def train_model(
         avg_epoch_loss = epoch_loss / len(train_loader)
         print(f"Epoch [{epoch}/{num_epochs}] Average Loss: {avg_epoch_loss:.4f}")
 
-        # Check representation collapse
+        # Check for representation collapse
         if last_pred_encs is not None:
             avg_std = last_pred_encs.std(dim=0).mean().item()
             if avg_std < 1e-3:
@@ -176,7 +180,7 @@ def train_model(
         model.eval()
         probing_config = ProbingConfig(
             probe_targets="locations",
-            lr=0.0002,  
+            lr=0.0002,
             epochs=20,
             schedule=None,
             sample_timesteps=30,
@@ -256,8 +260,7 @@ def main():
 
     train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
 
-    #data_path = "/scratch/DL24FA"
-    data_path = "./data/DL24FA"
+    data_path = "/scratch/DL24FA"
     probe_train_ds = create_wall_dataloader(
         data_path=f"{data_path}/probe_normal/train",
         probing=True,
@@ -307,7 +310,7 @@ def main():
     wandb.finish()
 
 if __name__ == "__main__":
-    # Define the sweep config
+    # Example sweep_config
     sweep_config = {
         "method": "grid",
         "parameters": {
@@ -320,6 +323,5 @@ if __name__ == "__main__":
         }
     }
 
-    # Create the sweep and run the agent
-    sweep_id = wandb.sweep(sweep_config, project='my_jepa_project')
+    sweep_id = wandb.sweep(sweep_config, project='jepa_project_sweep_2')
     wandb.agent(sweep_id, function=main)
