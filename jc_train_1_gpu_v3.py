@@ -46,26 +46,30 @@ class Trainer:
 
     def validate_model(self, model, val_loader):
         model.eval()
-        val_loss, var_culm, cov_culm, contra_culm = 0.0, 0.0, 0.0, 0.0
+        val_loss, var_culm, cov_culm = 0.0, 0.0, 0.0
 
         with torch.no_grad():
             for batch in tqdm(val_loader, desc="Validating", leave=False):
                 states, actions = batch.states.to(self.device), batch.actions.to(self.device)
                 init_state = states[:, 0]
+
+                # Slice actions for T-1 timesteps
                 pred_encs = model.forward(init_state, actions[:, :-1])
 
-                target_encs = torch.stack([model.target_encoder(states[:, t]) for t in range(states.size(1))], dim=1)
+                # Compute target encodings for all T timesteps
+                target_encs = torch.stack([model.target_encoder(states[:, t]) for t in range(actions.size(1) + 1)], dim=1)
 
+                # Compute loss
                 loss, _, var, cov, _ = model.compute_loss(
-                    pred_encs, target_encs, debug=True, **self.config
+                    pred_encs, target_encs[:, :pred_encs.size(1)], debug=True, **self.config
                 )
                 val_loss += loss.item()
                 var_culm += var
                 cov_culm += cov
-                # contra_culm += contra
 
         print(f"Validation Variance: {var_culm / len(val_loader)}, Covariance: {cov_culm / len(val_loader)}")
         return val_loss / len(val_loader)
+
 
     def train(self):
         train_loader, val_loader = self.load_data()
