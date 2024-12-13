@@ -203,6 +203,8 @@ class JEPA_Model(nn.Module):
                    debug=False,
                    max_grad_norm=0.5,
                    min_variance = 1.0,
+                   lambda_contrastive=0.1,
+                   margin=1.0,
                    *args, **kwargs):
         """
         Perform a single training step.
@@ -228,9 +230,26 @@ class JEPA_Model(nn.Module):
 
         # Compute the loss function
         if not debug:
-            loss = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov, min_variance=min_variance)
+            loss = self.compute_loss(pred_encs, 
+                                     target_encs, 
+                                     distance_function, 
+                                     lambda_energy, 
+                                     lambda_var, 
+                                     lambda_cov, 
+                                     lambda_contrastive=lambda_contrastive,
+                                     margin=margin,
+                                     min_variance=min_variance)
         else:
-            loss, energy, var, cov = self.compute_loss(pred_encs, target_encs, distance_function, lambda_energy, lambda_var, lambda_cov, min_variance=min_variance, debug=True)
+            loss, energy, var, cov = self.compute_loss(pred_encs, 
+                                                       target_encs, 
+                                                       distance_function, 
+                                                       lambda_energy, 
+                                                       lambda_var, 
+                                                       lambda_cov, 
+                                                       lambda_contrastive=lambda_contrastive,
+                                                       min_variance=min_variance, 
+                                                       margin=margin,
+                                                       debug=True)
 
 
         # Backpropagation
