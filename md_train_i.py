@@ -265,87 +265,87 @@ def train_model(
         if epoch % save_every == 0:
             save_model(model, optimizer, epoch, -1, learning_rate, dropout, lambda_cov, probe_lr)
 
-    def run_training():
-        """
-        This function is called by each sweep agent. It initializes a wandb run,
-        retrieves hyperparameters from wandb.config, and starts the training process.
-        """
-        # Initialize a new wandb run
-        wandb.init(project="my_jepa_project_sweep_i_margin", config={
-            "method": "contrastive_learning"
-        })  # Replace with your actual project name if different
+def run_training():
+    """
+    This function is called by each sweep agent. It initializes a wandb run,
+    retrieves hyperparameters from wandb.config, and starts the training process.
+    """
+    # Initialize a new wandb run
+    wandb.init(project="my_jepa_project_sweep_i_margin", config={
+        "method": "contrastive_learning"
+    })  # Replace with your actual project name if different
 
-        # Retrieve hyperparameters from wandb.config
-        config = wandb.config
+    # Retrieve hyperparameters from wandb.config
+    config = wandb.config
 
-        dropout = config.get("dropout", 0.0)
-        learning_rate = config.get("learning_rate", 1e-3)
-        lambda_cov = config.get("lambda_cov", 0.1)
-        momentum = config.get("momentum", 0.99)
-        batch_size = config.get("batch_size", 64)
-        probe_lr = config.get("probe_lr", 0.0002)
-        num_epochs = config.get("epochs", 10)
-        margin = config.get("margin", 1.0)
+    dropout = config.get("dropout", 0.0)
+    learning_rate = config.get("learning_rate", 1e-3)
+    lambda_cov = config.get("lambda_cov", 0.1)
+    momentum = config.get("momentum", 0.99)
+    batch_size = config.get("batch_size", 64)
+    probe_lr = config.get("probe_lr", 0.0002)
+    num_epochs = config.get("epochs", 10)
+    margin = config.get("margin", 1.0)
 
-        device = get_device()
+    device = get_device()
 
-        # Load training data
-        train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
+    # Load training data
+    train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
 
-        # Load probing datasets
-        data_path = "/scratch/DL24FA"
-        probe_train_ds = create_wall_dataloader(
-            data_path=f"{data_path}/probe_normal/train",
-            probing=True,
-            device=device,
-            train=True,
-            batch_size=batch_size
-        )
+    # Load probing datasets
+    data_path = "/scratch/DL24FA"
+    probe_train_ds = create_wall_dataloader(
+        data_path=f"{data_path}/probe_normal/train",
+        probing=True,
+        device=device,
+        train=True,
+        batch_size=batch_size
+    )
 
-        probe_val_normal_ds = create_wall_dataloader(
-            data_path=f"{data_path}/probe_normal/val",
-            probing=True,
-            device=device,
-            train=False,
-            batch_size=batch_size
-        )
+    probe_val_normal_ds = create_wall_dataloader(
+        data_path=f"{data_path}/probe_normal/val",
+        probing=True,
+        device=device,
+        train=False,
+        batch_size=batch_size
+    )
 
-        probe_val_wall_ds = create_wall_dataloader(
-            data_path=f"{data_path}/probe_wall/val",
-            probing=True,
-            device=device,
-            train=False,
-            batch_size=batch_size
-        )
+    probe_val_wall_ds = create_wall_dataloader(
+        data_path=f"{data_path}/probe_wall/val",
+        probing=True,
+        device=device,
+        train=False,
+        batch_size=batch_size
+    )
 
-        # Initialize the model
-        model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
-        model.to(device)
+    # Initialize the model
+    model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
+    model.to(device)
 
-        # Start training
-        model, optimizer = train_model(
-            device=device,
-            model=model,
-            train_loader=train_loader,
-            probe_train_ds=probe_train_ds,
-            probe_val_normal_ds=probe_val_normal_ds,
-            probe_val_wall_ds=probe_val_wall_ds,
-            num_epochs=num_epochs,
-            learning_rate=learning_rate,
-            momentum=momentum,
-            save_every=1,
-            train_sampler=train_sampler,
-            distance_function="l2",  # Set a default distance function
-            dropout=dropout,
-            lambda_cov=lambda_cov,
-            margin=margin
-        )
+    # Start training
+    model, optimizer = train_model(
+        device=device,
+        model=model,
+        train_loader=train_loader,
+        probe_train_ds=probe_train_ds,
+        probe_val_normal_ds=probe_val_normal_ds,
+        probe_val_wall_ds=probe_val_wall_ds,
+        num_epochs=num_epochs,
+        learning_rate=learning_rate,
+        momentum=momentum,
+        save_every=1,
+        train_sampler=train_sampler,
+        distance_function="l2",  # Set a default distance function
+        dropout=dropout,
+        lambda_cov=lambda_cov,
+        margin=margin
+    )
 
-        # Final model save after training completes
-        save_model(model, optimizer, num_epochs, -1, learning_rate, dropout, lambda_cov, probe_lr)
+    # Final model save after training completes
+    save_model(model, optimizer, num_epochs, -1, learning_rate, dropout, lambda_cov, probe_lr)
 
-        # Finish the wandb run
-        wandb.finish()
+    # Finish the wandb run
+    wandb.finish()
 
 def main():
     """
