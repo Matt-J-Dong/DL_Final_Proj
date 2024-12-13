@@ -95,7 +95,7 @@ class Trainer:
                 )
                 epoch_loss += loss
 
-                if batch_idx % 10 == 0:
+                if batch_idx % 10 == 0 or batch_idx == len(train_loader) - 1:
                     wandb.log({"loss": loss, 
                                "energy_loss": e_loss, 
                                "variance_loss": var_loss, 
