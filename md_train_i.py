@@ -8,15 +8,15 @@ import glob
 import torch.multiprocessing as mp
 
 from dataset import create_wall_dataloader
-from models_md_g import JEPA_Model  # Updated import to models_md_g
+from models_md_i import JEPA_Model  # Updated import to models_md_i
 from evaluator_md import ProbingEvaluator, ProbingConfig
 from dotenv import load_dotenv
 import wandb
 
+# Load environment variables
 load_dotenv()
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")
 os.environ["WANDB_API_KEY"] = WANDB_API_KEY
-wandb.login(key=WANDB_API_KEY)
 
 def get_device():
     """Set the device for single-GPU training."""
@@ -42,16 +42,16 @@ def save_model(model, optimizer, epoch, batch_idx, learning_rate, dropout, lambd
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
-    # Include probe_lr in filename
+    # Include probe_lr and version 'i' in filename
     if batch_idx == -1:
         save_file = os.path.join(
             save_path,
-            f"jepa_model_g_epoch_{epoch}_final_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
+            f"jepa_model_i_epoch_{epoch}_final_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
         )
     else:
         save_file = os.path.join(
             save_path,
-            f"jepa_model_g_epoch_{epoch}_batch_{batch_idx}_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
+            f"jepa_model_i_epoch_{epoch}_batch_{batch_idx}_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
         )
 
     torch.save({
@@ -70,7 +70,7 @@ def load_latest_checkpoint(model, optimizer, learning_rate, dropout, lambda_cov,
     if not os.path.exists(checkpoint_dir):
         return 1, 0
 
-    pattern = f"jepa_model_g_epoch_*_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
+    pattern = f"jepa_model_i_epoch_*_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
     checkpoint_files = glob.glob(os.path.join(checkpoint_dir, pattern))
     if len(checkpoint_files) == 0:
         return 1, 0
@@ -104,9 +104,10 @@ def train_model(
     momentum=0.99,
     save_every=1,
     train_sampler=None,
-    distance_function="l2",
+    distance_function="l2",  # Set a default value
     dropout=0.0,
     lambda_cov=0.1,
+    margin=1.0,  # Added margin parameter
 ):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
     steps_per_epoch = len(train_loader)
@@ -146,14 +147,25 @@ def train_model(
             states = batch.states.to(device)
             actions = batch.actions.to(device)
 
+            # Generate binary labels: 0 for good inputs, 1 for bad inputs
+            # Here, we assume half of the batch is good and half is bad
+            # Adjust this as per your data handling strategy
+            B = states.size(0)
+            labels = torch.cat([
+                torch.zeros(B // 2, device=device),
+                torch.ones(B - B // 2, device=device)
+            ])
+
             energy_loss, contrastive_loss, total_loss, pred_encs = model.train_step(
                 states=states, 
                 actions=actions,
+                labels=labels,
                 optimizer=optimizer,
                 momentum=momentum,
                 distance_function=distance_function,
                 add_noise=True,
-                lambda_cov=lambda_cov
+                lambda_cov=lambda_cov,
+                margin=margin
             )
             epoch_energy_loss += energy_loss
             epoch_contrastive_loss += contrastive_loss
@@ -226,10 +238,11 @@ def train_model(
             "dropout": dropout,
             "lambda_cov": lambda_cov,
             "batch_size": wandb.config.get("batch_size"),
-            "momentum": momentum
+            "momentum": momentum,
+            "margin": margin  # Log the margin parameter
         })
 
-        with open("losses_f.txt", "a") as f:
+        with open("losses_i.txt", "a") as f:
             f.write(f"Epoch {epoch}: train_energy_loss={avg_epoch_energy_loss}, train_contrastive_loss={avg_epoch_contrastive_loss}, train_total_loss={avg_epoch_total_loss}, val_loss_normal={val_loss_normal}, val_loss_wall={val_loss_wall}, probing_lr={current_probe_lr}\n")
 
         model.train()
@@ -252,86 +265,112 @@ def train_model(
         if epoch % save_every == 0:
             save_model(model, optimizer, epoch, -1, learning_rate, dropout, lambda_cov, probe_lr)
 
-    print("Training completed.")
-    return model
+    def run_training():
+        """
+        This function is called by each sweep agent. It initializes a wandb run,
+        retrieves hyperparameters from wandb.config, and starts the training process.
+        """
+        # Initialize a new wandb run
+        wandb.init(project="my_jepa_project_sweep_i_margin", config={
+            "method": "contrastive_learning"
+        })  # Replace with your actual project name if different
 
-def main():
-    wandb.init(project="my_jepa_project_sweep")  # Start W&B run under a sweep agent
-    sweep_config = {
-    "method": "grid",
-    "parameters": {
-        "momentum": {"values": [0.9, 0.99]},
-        "batch_size": {"values": [128,512]},
-        "probe_lr": {"values": [0.0005, 0.002, 0.008]},
-        "lambda_cov": {"values": [0.4, 0.7]},
-        "learning_rate": {"values": [5e-5, 1e-4, 5e-4]},
-        "dropout": {"values": [0.0]}
-    }
-    }
-    device = get_device()
-    distance_function="l2"
+        # Retrieve hyperparameters from wandb.config
+        config = wandb.config
 
-    # Hyperparameters from wandb.config (sweep)
-    dropout = wandb.config.get("dropout", 0.0)
-    learning_rate = wandb.config.get("learning_rate", 1e-3)
-    lambda_cov = wandb.config.get("lambda_cov", 0.1)
-    momentum = wandb.config.get("momentum", 0.99)
-    batch_size = wandb.config.get("batch_size", 64)
-    probe_lr = wandb.config.get("probe_lr", 0.0002)
-    num_epochs = wandb.config.get("epochs", 10)
+        dropout = config.get("dropout", 0.0)
+        learning_rate = config.get("learning_rate", 1e-3)
+        lambda_cov = config.get("lambda_cov", 0.1)
+        momentum = config.get("momentum", 0.99)
+        batch_size = config.get("batch_size", 64)
+        probe_lr = config.get("probe_lr", 0.0002)
+        num_epochs = config.get("epochs", 10)
+        margin = config.get("margin", 1.0)
 
-    train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
+        device = get_device()
 
-    data_path = "/scratch/DL24FA"
-    probe_train_ds = create_wall_dataloader(
-        data_path=f"{data_path}/probe_normal/train",
-        probing=True,
-        device=device,
-        train=True,
-        batch_size=batch_size
-    )
+        # Load training data
+        train_loader, train_sampler = load_data(device, batch_size=batch_size, is_distributed=False)
 
-    probe_val_normal_ds = create_wall_dataloader(
-        data_path=f"{data_path}/probe_normal/val",
-        probing=True,
-        device=device,
-        train=False,
-        batch_size=batch_size
-    )
+        # Load probing datasets
+        data_path = "/scratch/DL24FA"
+        probe_train_ds = create_wall_dataloader(
+            data_path=f"{data_path}/probe_normal/train",
+            probing=True,
+            device=device,
+            train=True,
+            batch_size=batch_size
+        )
 
-    probe_val_wall_ds = create_wall_dataloader(
-        data_path=f"{data_path}/probe_wall/val",
-        probing=True,
-        device=device,
-        train=False,
-        batch_size=batch_size
-    )
+        probe_val_normal_ds = create_wall_dataloader(
+            data_path=f"{data_path}/probe_normal/val",
+            probing=True,
+            device=device,
+            train=False,
+            batch_size=batch_size
+        )
 
-    model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
-    model.to(device)
+        probe_val_wall_ds = create_wall_dataloader(
+            data_path=f"{data_path}/probe_wall/val",
+            probing=True,
+            device=device,
+            train=False,
+            batch_size=batch_size
+        )
 
-    trained_model = train_model(
-        device=device,
-        model=model,
-        train_loader=train_loader,
-        probe_train_ds=probe_train_ds,
-        probe_val_normal_ds=probe_val_normal_ds,
-        probe_val_wall_ds=probe_val_wall_ds,
-        num_epochs=num_epochs,
-        learning_rate=learning_rate,
-        momentum=momentum,
-        save_every=1,
-        train_sampler=train_sampler,
-        distance_function=distance_function,
-        dropout=dropout,
-        lambda_cov=lambda_cov,
-    )
+        # Initialize the model
+        model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
+        model.to(device)
 
-    # Final save
-    optimizer = optim.Adam(trained_model.parameters(), lr=learning_rate, weight_decay=1e-4)
-    save_model(trained_model, optimizer, num_epochs, -1, learning_rate, dropout, lambda_cov, probe_lr)
+        # Start training
+        model, optimizer = train_model(
+            device=device,
+            model=model,
+            train_loader=train_loader,
+            probe_train_ds=probe_train_ds,
+            probe_val_normal_ds=probe_val_normal_ds,
+            probe_val_wall_ds=probe_val_wall_ds,
+            num_epochs=num_epochs,
+            learning_rate=learning_rate,
+            momentum=momentum,
+            save_every=1,
+            train_sampler=train_sampler,
+            distance_function="l2",  # Set a default distance function
+            dropout=dropout,
+            lambda_cov=lambda_cov,
+            margin=margin
+        )
 
-    wandb.finish()
+        # Final model save after training completes
+        save_model(model, optimizer, num_epochs, -1, learning_rate, dropout, lambda_cov, probe_lr)
 
-if __name__ == "__main__":
-    main()
+        # Finish the wandb run
+        wandb.finish()
+
+    def main():
+        """
+        Main function to set up the WandB sweep and start the agents.
+        """
+        # Define the sweep configuration
+        sweep_config = {
+            "method": "grid",
+            "parameters": {
+                "momentum": {"values": [0.9, 0.99]},
+                "batch_size": {"values": [128, 512]},
+                "probe_lr": {"values": [0.0005, 0.002, 0.008]},
+                "lambda_cov": {"values": [0.4, 0.7]},
+                "learning_rate": {"values": [5e-5, 1e-4, 5e-4]},
+                "dropout": {"values": [0.0]},
+                "margin": {"values": [1.0, 1.5, 2.0]}  # Added margin hyperparameter
+            }
+        }
+
+        # Initialize the sweep
+        sweep_id = wandb.sweep(sweep_config, project="my_jepa_project_sweep_i_margin")  # Update project name as needed
+
+        # Start the sweep agent
+        wandb.agent(sweep_id, function=run_training)
+
+    if __name__ == "__main__":
+        main()
+
