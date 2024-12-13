@@ -44,7 +44,7 @@ def load_model(checkpoint_path="./checkpoints_wandb"):
         raise FileNotFoundError("No checkpoint directory found.")
 
     # Updated pattern to match the filenames from md_train_c.py
-    pattern = "jepa_model_c_epoch_*_lr_*_do_*_cov_*_probe_*.pth"
+    pattern = "jepa_model_g_epoch_*_lr_*_do_*_cov_*_probe_*.pth"
     checkpoint_files = glob.glob(os.path.join(checkpoint_path, pattern))
     if len(checkpoint_files) == 0:
         raise FileNotFoundError("No checkpoint found in the directory.")

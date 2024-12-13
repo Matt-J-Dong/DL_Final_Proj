@@ -27,12 +27,14 @@ class Encoder(nn.Module):
         self.features = nn.Sequential(*list(resnet.children())[:-2])  # Exclude avgpool and fc
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))  # Global average pooling
         self.fc = nn.Linear(resnet.fc.in_features, output_dim)  # Replace with custom FC layer
+        self.norm = nn.LayerNorm(output_dim)  # Added LayerNorm for normalization
 
     def forward(self, x):
         x = self.features(x)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
+        x = self.norm(x)  # Apply LayerNorm
         return x
 
 class Predictor(nn.Module):
@@ -43,6 +45,7 @@ class Predictor(nn.Module):
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(p=dropout) if dropout > 0 else nn.Identity()
         self.fc2 = nn.Linear(hidden_dim, output_dim)
+        self.norm = nn.LayerNorm(output_dim)  # Added LayerNorm for normalization
         self.residual = nn.Linear(input_dim, output_dim)  # Residual connection
 
     def forward(self, s_prev, u_prev):
@@ -53,6 +56,7 @@ class Predictor(nn.Module):
         x = self.relu(x)
         x = self.dropout(x)  # Apply dropout after activation
         x = self.fc2(x)
+        x = self.norm(x)  # Apply LayerNorm
         return x + res
 
 class JEPA_Model(nn.Module):
@@ -110,6 +114,29 @@ class JEPA_Model(nn.Module):
             raise ValueError(f"Unknown distance function: {distance_function}")
         return energy
 
+    def compute_contrastive_loss(self, predicted_encs, target_encs, temperature=0.1):
+        """
+        Compute contrastive loss using InfoNCE.
+        """
+        # Normalize embeddings
+        predicted_norm = nn.functional.normalize(predicted_encs, dim=-1)
+        target_norm = nn.functional.normalize(target_encs, dim=-1)
+
+        # Compute similarity matrix
+        similarity_matrix = torch.matmul(predicted_norm, target_norm.transpose(-1, -2)) / temperature
+
+        # Create labels for contrastive prediction (diagonal elements are positives)
+        batch_size, T, _ = similarity_matrix.shape
+        labels = torch.arange(batch_size * T).to(predicted_encs.device)
+
+        # Flatten the similarity matrix
+        similarity_matrix = similarity_matrix.view(batch_size * T, -1)
+
+        # Compute cross-entropy loss
+        contrastive_loss = nn.CrossEntropyLoss()(similarity_matrix, labels)
+
+        return contrastive_loss
+
     def train_step(self, states, actions, optimizer, momentum=0.99, distance_function="l2", add_noise=False, lambda_cov=0.5):
         B, T, C, H, W = states.shape
 
@@ -131,10 +158,15 @@ class JEPA_Model(nn.Module):
             target_encs.append(s_target)
         target_encs = torch.stack(target_encs, dim=1)
 
-        loss = self.compute_energy(pred_encs, target_encs, distance_function)
+        # Compute energy loss
+        energy_loss = self.compute_energy(pred_encs, target_encs, distance_function)
+
+        # Compute contrastive loss
+        contrastive_loss = self.compute_contrastive_loss(pred_encs, target_encs)
+
+        # Total loss with regularizations
         lambda_var = 0.1
-        loss += lambda_var * self.variance_regularization(pred_encs)
-        loss += lambda_cov * self.covariance_regularization(pred_encs)
+        loss = energy_loss + contrastive_loss + lambda_var * self.variance_regularization(pred_encs) + lambda_cov * self.covariance_regularization(pred_encs)
 
         optimizer.zero_grad()
         loss.backward()
@@ -144,7 +176,7 @@ class JEPA_Model(nn.Module):
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
 
-        return loss.item(), pred_encs
+        return energy_loss.item(), contrastive_loss.item(), loss.item(), pred_encs
 
 class Prober(torch.nn.Module):
     def __init__(
