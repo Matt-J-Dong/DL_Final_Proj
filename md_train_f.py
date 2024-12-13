@@ -143,7 +143,7 @@ def train_model(
             actions = batch.actions.to(device)
 
             # Dummy GPU usage: a small random matmul to keep GPU busy
-            dummy_tensor = torch.randn(64, 64, device=device)
+            dummy_tensor = torch.randn(256, 256, device=device)
             _ = dummy_tensor @ dummy_tensor  # just to keep GPU usage up
 
             loss_value, pred_encs = model.train_step(
