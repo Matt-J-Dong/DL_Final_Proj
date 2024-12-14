@@ -34,8 +34,7 @@ def main():
         probing=False,
         device=device,
         train=True,
-        batch_size=batch_size,
-        return_dataset=True  # Modify your dataloader to return a dataset object if needed
+        batch_size=batch_size
     )
 
     # Create a 1% subset of the dataset
