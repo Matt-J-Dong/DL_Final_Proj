@@ -27,25 +27,25 @@ class SmallCNN(nn.Module):
         super(SmallCNN, self).__init__()
         self.features = nn.Sequential(
             # First Convolutional Block
-            nn.Conv2d(input_channels, 32, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(input_channels, 16, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(16),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
 
             # Second Convolutional Block
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(64),
+            nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
 
             # Third Convolutional Block
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(128),
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
         )
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))  # Global average pooling
-        self.fc = nn.Linear(128, output_dim)  # Fully connected layer to output_dim
+        self.fc = nn.Linear(64, output_dim)  # Fully connected layer to output_dim
 
     def forward(self, x):
         x = self.features(x)
@@ -65,7 +65,7 @@ class Encoder(nn.Module):
         return x
 
 class Predictor(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=512, dropout=0.3):  # Increased dropout to 0.3
+    def __init__(self, input_dim, output_dim, hidden_dim=512, dropout=0.0):
         super(Predictor, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.bn1 = nn.BatchNorm1d(hidden_dim)
@@ -85,7 +85,7 @@ class Predictor(nn.Module):
         return x + res
 
 class JEPA_Model(nn.Module):
-    def __init__(self, device="cuda", repr_dim=256, action_dim=2, dropout=0.3):  # Pass increased dropout
+    def __init__(self, device="cuda", repr_dim=256, action_dim=2, dropout=0.0):  # Pass increased dropout
         super(JEPA_Model, self).__init__()
         self.device = device
         self.repr_dim = repr_dim
