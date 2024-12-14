@@ -10,6 +10,9 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR
 import wandb
 from dotenv import load_dotenv
 
+# Added imports for probing evaluation
+from evaluator import ProbingConfig, ProbingEvaluator
+
 load_dotenv()
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")
 os.environ["WANDB_API_KEY"] = WANDB_API_KEY
@@ -39,6 +42,10 @@ class Trainer:
 
         train_loader = DataLoader(train_dataset, batch_size=self.config["batch_size"], shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=self.config["batch_size"], shuffle=False)
+
+        # Store datasets for probing evaluation
+        self.train_dataset = train_dataset
+        self.val_dataset = val_dataset
 
         return train_loader, val_loader
 
@@ -72,20 +79,78 @@ class Trainer:
                 var_culm += var
                 cov_culm += cov
 
-        print(f"Validation Variance: {var_culm / len(val_loader)}, Covariance: {cov_culm / len(val_loader)}")
-        return val_loss / len(val_loader)
+        avg_val_loss = val_loss / len(val_loader)
+        avg_var = var_culm / len(val_loader)
+        avg_cov = cov_culm / len(val_loader)
+        print(f"Validation Loss: {avg_val_loss:.4f}, Variance: {avg_var:.4f}, Covariance: {avg_cov:.4f}")
 
+        # Begin Probing Evaluation
+        # Get probe_lr from config or wandb
+        probe_lr = self.config.get("probe_lr", 0.0002)
+        
+        # Assuming self.train_dataset and self.val_dataset are available
+        probe_train_ds = self.train_dataset
+        probe_val_ds = self.val_dataset
+
+        # Define ProbingConfig
+        probing_config = ProbingConfig(
+            probe_targets="locations",
+            lr=probe_lr,  # default, overridden below
+            epochs=20,
+            schedule=None,
+            sample_timesteps=30,
+            prober_arch="256",
+        )
+
+        # Initialize ProbingEvaluator
+        evaluator = ProbingEvaluator(
+            device=self.device,
+            model=model,
+            probe_train_ds=probe_train_ds,
+            probe_val_ds=probe_val_ds,
+            config=probing_config,
+            quick_debug=False
+        )
+
+        # Override probe_lr from config if necessary
+        evaluator.config.lr = probe_lr
+
+        # Train prober
+        prober = evaluator.train_pred_prober()
+
+        # Evaluate prober
+        avg_losses = evaluator.evaluate_all(prober=prober)
+        val_loss_normal = avg_losses.get("normal", 0.0)
+        val_loss_wall = avg_losses.get("wall", 0.0)
+
+        current_probe_lr = probe_lr
+        print(f"Probing Evaluation - Validation normal loss: {val_loss_normal:.4f}, Validation wall loss: {val_loss_wall:.4f}, Probing LR: {current_probe_lr}")
+
+        # Log probing results to wandb
+        wandb.log({
+            "val_loss_normal": val_loss_normal,
+            "val_loss_wall": val_loss_wall,
+            "probing_lr": current_probe_lr
+        })
+
+        # Write probing results to file
+        with open("losses_c.txt", "a") as f:
+            f.write(f"Validation: val_loss_normal={val_loss_normal}, val_loss_wall={val_loss_wall}, probing_lr={current_probe_lr}\n")
+
+        return avg_val_loss
 
     def train(self):
         train_loader, val_loader = self.load_data()
         model = JEPA_Model(device=self.device, repr_dim=256, action_dim=2, dropout_prob=0).to(self.device)
 
         optimizer = optim.Adam(model.parameters(), lr=self.config["learning_rate"], weight_decay=1e-4)
-        scheduler = CyclicLR(optimizer,
-                                base_lr=self.config["learning_rate"]/10,
-                                max_lr=self.config["learning_rate"]*0.5,
-                                step_size_up=2 * len(train_loader),
-                                mode='triangular2')
+        scheduler = CyclicLR(
+            optimizer,
+            base_lr=self.config["learning_rate"] / 10,
+            max_lr=self.config["learning_rate"] * 0.5,
+            step_size_up=2 * len(train_loader),
+            mode='triangular2'
+        )
         
         # optimizer = torch.optim.SGD(model.parameters(), lr=self.config['learning_rate'], momentum=self.config['momentum'], weight_decay=1e-4)
         # scheduler = StepLR(optimizer, step_size=50, gamma=0.4)  # Reduce LR by 50% every 5 epochs
@@ -110,12 +175,14 @@ class Trainer:
                 epoch_loss += loss
 
                 if batch_idx % 10 == 0 or batch_idx == len(train_loader) - 1:
-                    wandb.log({"loss": loss, 
-                               "energy_loss": e_loss, 
-                               "variance_loss": var_loss, 
-                               "covariance_loss": cov_loss,
-                               "contrastive_loss": contra_loss,
-                               'lr': optimizer.param_groups[0]['lr']})
+                    wandb.log({
+                        "loss": loss, 
+                        "energy_loss": e_loss, 
+                        "variance_loss": var_loss, 
+                        "covariance_loss": cov_loss,
+                        "contrastive_loss": contra_loss,
+                        'lr': optimizer.param_groups[0]['lr']
+                    })
 
                 if batch_idx % 100 == 0:
                     print(f"Epoch [{epoch}/{self.config['num_epochs']}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}")
@@ -153,6 +220,7 @@ def main():
         'margin': 0.5,
         'lambda_contrastive': 0.0,
         'distance_function': 'l2',
+        "probe_lr": 0.0002,  # Added probe_lr to config
     }
 
     wandb.init(
