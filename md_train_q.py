@@ -5,7 +5,7 @@ from tqdm.auto import tqdm
 import os
 
 from dataset import create_wall_dataloader
-from model import SingleLinearModel
+from models_md_q import SingleLinearModel
 
 def get_device():
     if torch.cuda.is_available():
