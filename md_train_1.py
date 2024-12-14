@@ -13,6 +13,8 @@ import wandb
 from dotenv import load_dotenv
 from evaluator_md import ProbingEvaluator, ProbingConfig
 
+model_version = "1"
+
 load_dotenv()
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")
 os.environ["WANDB_API_KEY"] = WANDB_API_KEY
@@ -113,7 +115,7 @@ class Trainer:
     def save_model(self, model, epoch):
         save_path = self.config.get("save_path", "checkpoints")
         os.makedirs(save_path, exist_ok=True)
-        save_file = os.path.join(save_path, f"jepa_model_testing_1_epoch_{epoch}.pth")
+        save_file = os.path.join(save_path, f"jepa_model_{model_version}_epoch_{epoch}.pth")
         torch.save(model.state_dict(), save_file)
         print(f"Model saved to {save_file}")
 
@@ -198,7 +200,8 @@ class Trainer:
         })
 
         # Append losses to a text file for record-keeping
-        with open("losses_testing.txt", "a") as f:
+        with open(f"losses_model_{model_version}.txt", "a") as f:
+            print(f"Writing file: {f}")
             f.write(f"Epoch {epoch}: train_loss={avg_epoch_loss}, val_loss_normal={val_loss_normal}, val_loss_wall={val_loss_wall}, probing_lr={current_probe_lr}\n")
 
     def train(self):
@@ -290,7 +293,7 @@ def main():
     }
 
     wandb.init(
-        project="DL_Final_Project_2024",
+        project=f"DL_Final_Project_2024_model_{model_version}",
         config=config
     )
 
