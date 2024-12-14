@@ -10,6 +10,7 @@ try:
     # Print the first few elements of the file
     print("Head of the contents in actions.npy:")
     print(data[:10])  # Adjust the number of elements to print as needed
+    print(len(data))
     
 except FileNotFoundError:
     print(f"Error: The file {file_path} does not exist.")
