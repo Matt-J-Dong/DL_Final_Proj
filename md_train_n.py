@@ -242,7 +242,7 @@ def train_model(
             "target_average": target_average
         })
 
-        with open("losses_h_energy_reg.txt", "a") as f:
+        with open("losses_n_energy_reg.txt", "a") as f:
             f.write(f"Epoch {epoch}: train_energy_loss={avg_epoch_energy_loss}, train_energy_reg_loss={avg_epoch_energy_reg}, train_total_loss={avg_epoch_total_loss}, val_loss_normal={val_loss_normal}, val_loss_wall={val_loss_wall}, probing_lr={current_probe_lr}\n")
 
         model.train()
@@ -266,7 +266,7 @@ def train_model(
             save_model(model, optimizer, epoch, -1, learning_rate, dropout, lambda_cov, probe_lr)
 
 def main():
-    wandb.init(project="my_jepa_project_sweep_h_energy_reg_large", config={
+    wandb.init(project="my_jepa_project_sweep_n_energy_reg_large", config={
         "method": "energy_regularization",
         "batch_size": 256,
         "epochs": 50,
