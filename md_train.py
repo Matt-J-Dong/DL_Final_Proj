@@ -22,8 +22,8 @@ wandb.login(key=WANDB_API_KEY)
 
 if torch.cuda.is_available():
         device = torch.device('cuda')
-    else:
-        device = torch.device('cpu')
+else:
+    device = torch.device('cpu')
 
 class Trainer:
     def __init__(self, config):
