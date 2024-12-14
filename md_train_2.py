@@ -1,4 +1,3 @@
-# md_main_1.py (Version 2)
 # md_train_test.py
 
 import torch
@@ -8,11 +7,13 @@ from tqdm.auto import tqdm
 import os
 from torch.utils.data import random_split, DataLoader
 from dataset import create_wall_dataloader
-from models_md_2 import JEPA_Model
+from models_md_1 import JEPA_Model
 from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR
 import wandb
 from dotenv import load_dotenv
 from evaluator_md import ProbingEvaluator, ProbingConfig
+
+model_version = "v2"
 
 load_dotenv()
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")
@@ -114,8 +115,7 @@ class Trainer:
     def save_model(self, model, epoch):
         save_path = self.config.get("save_path", "checkpoints")
         os.makedirs(save_path, exist_ok=True)
-        # Updated checkpoint filename to include version 2
-        save_file = os.path.join(save_path, f"jepa_model_v2_epoch_{epoch}.pth")
+        save_file = os.path.join(save_path, f"jepa_model_{model_version}_epoch_{epoch}.pth")
         torch.save(model.state_dict(), save_file)
         print(f"Model saved to {save_file}")
 
@@ -200,7 +200,8 @@ class Trainer:
         })
 
         # Append losses to a text file for record-keeping
-        with open("losses_testing_v2.txt", "a") as f:  # Updated filename to include version 2
+        with open(f"losses_model_{model_version}.txt", "a") as f:
+            print(f"Writing file: {f}")
             f.write(f"Epoch {epoch}: train_loss={avg_epoch_loss}, val_loss_normal={val_loss_normal}, val_loss_wall={val_loss_wall}, probing_lr={current_probe_lr}\n")
 
     def train(self):
@@ -268,11 +269,11 @@ class Trainer:
                 #wandb.log({"val_loss": val_loss})
 
         print("Training completed.")
-        self.save_model(model, "final_v2")  # Updated final checkpoint name to include version 2
+        self.save_model(model, "final")
 
 def main():
     config = {
-        "batch_size": 256,
+        "batch_size": 1024,
         "num_epochs": 4,
         "learning_rate": 5e-5,
         'step_per_epoch': 1000,
@@ -292,7 +293,7 @@ def main():
     }
 
     wandb.init(
-        project="DL_Final_Project_2024",
+        project=f"DL_Final_Project_2024_model_{model_version}",
         config=config
     )
 
