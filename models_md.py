@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from torchvision.models import resnet18, resnet50
 from torchvision.models.resnet import BasicBlock
-
+import numpy as np
 
 def build_mlp(layers_dims: List[int]):
     """Utility function to build an MLP."""
