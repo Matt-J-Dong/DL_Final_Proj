@@ -9,7 +9,7 @@ import glob
 import torch.multiprocessing as mp
 
 from dataset import create_wall_dataloader
-from models_md_n import JEPA_Model  # Updated import to models_md_h_energy_reg
+from models_md_n import JEPA_Model
 from evaluator_md import ProbingEvaluator, ProbingConfig
 from dotenv import load_dotenv
 import wandb
@@ -43,7 +43,7 @@ def save_model(model, optimizer, epoch, batch_idx, learning_rate, dropout, lambd
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
-    # Include probe_lr and version 'h_energy_reg' in filename
+    # Include probe_lr and version 'n_energy_reg' in filename
     if batch_idx == -1:
         save_file = os.path.join(
             save_path,
