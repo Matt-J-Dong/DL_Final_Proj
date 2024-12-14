@@ -132,7 +132,7 @@ def main():
         "lambda_var": 0.05,
         "lambda_cov": 1e-3,
         "max_grad_norm": 1.0,
-        "min_variance": 1.0,
+        "min_variance": 0.1,
         "save_every": 1,
         'margin': 0.5,
         'lambda_contrastive': 0.0,

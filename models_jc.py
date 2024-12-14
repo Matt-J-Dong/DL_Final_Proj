@@ -131,46 +131,40 @@ class JEPA_Model(nn.Module):
         pred_encs = torch.stack(pred_encs, dim=1)
         return pred_encs
 
-    def variance_regularization(self, states, epsilon=1e-4, min_variance=1.0):
+    def variance_regularization(self, pred_encs, target_encs, epsilon=1e-4, min_variance=1.0):
+        # Combine predicted and target embeddings
+        states = torch.cat([pred_encs, target_encs], dim=0)
+        
+        # Compute variance for each dimension
         if states.ndim == 3:
             states = states.view(-1, states.size(-1))
-        
         std_x = torch.sqrt(states.var(dim=0) + epsilon)
         
-        # Modify with a minimum variance threshold
-        min_variance = min_variance
+        # Penalize dimensions with variance below the threshold
         variance_loss = torch.mean(torch.relu(min_variance - std_x))
-
-        
         return variance_loss
 
-    def covariance_regularization(self, states, epsilon=1e-4):
+
+    def covariance_regularization(self, pred_encs, target_encs, epsilon=1e-4):
+        # Combine predicted and target embeddings
+        states = torch.cat([pred_encs, target_encs], dim=0)
+        
+        # Center embeddings
         if states.ndim == 3:
             states = states.view(-1, states.size(-1))
-        
-        # Center the states
         states = states - states.mean(dim=0)
         
         # Compute covariance matrix
         cov_matrix = torch.matmul(states.t(), states) / (states.size(0) - 1)
         
-        # Remove diagonal (we only care about off-diagonal correlations)
+        # Remove diagonal (focus on off-diagonal correlations)
         off_diagonal = cov_matrix.clone()
         torch.diagonal(off_diagonal)[:] = 0
         
-        # Compute off-diagonal covariance loss
-        # Use a more aggressive penalty for off-diagonal elements
-        cov_loss = torch.sum(off_diagonal.pow(2))
-        
-        # Normalize by the number of off-diagonal elements
-        dim = states.size(1)
-        num_off_diagonal = dim * (dim - 1)
-        
-        # Add small epsilon to prevent division by zero
-        cov_loss = cov_loss / (num_off_diagonal + epsilon)
-        
-        # Additional clipping to prevent extreme values
+        # Penalize off-diagonal correlations
+        cov_loss = torch.sum(off_diagonal.pow(2)) / (states.size(1) * (states.size(1) - 1) + epsilon)
         return torch.clamp(cov_loss, min=epsilon, max=5.0)
+
 
 
 
@@ -324,8 +318,8 @@ class JEPA_Model(nn.Module):
         energy = lambda_energy * self.compute_energy(pred_encs, target_encs, distance_function)
 
         # Add regularization terms
-        var = lambda_var * self.variance_regularization(pred_encs, min_variance=min_variance)
-        cov = lambda_cov * self.covariance_regularization(pred_encs)
+        var = lambda_var * self.variance_regularization(pred_encs, target_encs, min_variance=min_variance)
+        cov = lambda_cov * self.covariance_regularization(pred_encs, target_encs,)
 
         # Compute contrastive loss
         contrastive = lambda_contrastive * self.contrastive_loss(pred_encs, target_encs, margin=margin)
