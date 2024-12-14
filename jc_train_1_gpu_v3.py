@@ -153,7 +153,7 @@ def main():
         "momentum": 0.996,
         "split_ratio": 0.9,
         "lambda_energy": 1.0,
-        "lambda_var": 1.0,
+        "lambda_var": 20.0,
         "lambda_cov": 0.05,
         "max_grad_norm": 1.0,
         "min_variance": 1.0,
