@@ -134,7 +134,7 @@ class Trainer:
         })
 
         # Write probing results to file
-        with open("losses_c.txt", "a") as f:
+        with open("losses_testing.txt", "a") as f:
             f.write(f"Validation: val_loss_normal={val_loss_normal}, val_loss_wall={val_loss_wall}, probing_lr={current_probe_lr}\n")
 
         return avg_val_loss
