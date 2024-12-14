@@ -62,7 +62,7 @@ class Trainer:
 
         # Split both loaders' datasets consistently
         full_train_dataset = train_loader.dataset
-        full_val_dataset = val_loader.dataset
+        #full_val_dataset = val_loader.dataset
 
         train_size = int(self.config["split_ratio"] * len(full_train_dataset))
         val_size = len(full_train_dataset) - train_size
