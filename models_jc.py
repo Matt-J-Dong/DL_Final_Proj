@@ -17,7 +17,7 @@ def build_mlp(layers_dims: List[int]):
 
 
 class Encoder(nn.Module):
-    def __init__(self, output_dim=256):
+    def __init__(self, output_dim=256, dropout_prob=0.1):
         super(Encoder, self).__init__()
         self.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
@@ -117,7 +117,7 @@ class JEPA_Model(nn.Module):
         self.action_dim = action_dim
         self.dropout_prob = dropout_prob
 
-        self.encoder = Encoder(output_dim=repr_dim, input_channels=2, dropout_prob=dropout_prob).to(device)
+        self.encoder = Encoder(output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
 
         self.expander = Expander(input_dim=repr_dim, hidden_dim=1024, output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
 
