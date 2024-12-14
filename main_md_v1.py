@@ -49,7 +49,7 @@ def load_model():
     # Load the saved model weights
     #state_dict = torch.load('./checkpoints/jepa_model_epoch_final.pth', map_location=torch.device(device))
 
-    state_dict = torch.load('./checkpoints/jepa_model_testing_1_final.pth', map_location=torch.device(device))
+    state_dict = torch.load('./checkpoints/jepa_model_testing_1_epoch_final.pth', map_location=torch.device(device))
 
     #state_dict = torch.load('./checkpoints/jepa_model_epoch_10.pth', map_location=torch.device('cpu'))
     
