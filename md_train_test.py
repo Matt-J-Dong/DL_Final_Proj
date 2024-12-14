@@ -59,10 +59,7 @@ class Trainer:
 
         full_dataset = full_loader.dataset
         train_size = int(self.config["split_ratio"] * len(full_dataset))
-        val_size = len(full_dataset) - train_size
-        train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
 
-        # Save datasets for probing
         self.train_dataset = train_dataset
 
         train_loader = DataLoader(train_dataset, batch_size=self.config["batch_size"], shuffle=True)
@@ -97,7 +94,7 @@ class Trainer:
             device=self.device,
             model=model,
             probe_train_ds=self.train_dataset,  # Using the training dataset for probing
-            probe_val_ds=self.val_dataset,      # Using the validation dataset for probing
+            probe_val_ds=self.val_loader,      # Using the validation dataset for probing
             config=probing_config,
             quick_debug=False
         )
