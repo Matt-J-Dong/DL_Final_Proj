@@ -143,10 +143,10 @@ class JEPA_Model(nn.Module):
         # Reshape to 2D for BatchNorm
         if pred_encs.ndim == 3:
             B, T, D = pred_encs.shape
-            pred_encs = pred_encs.view(-1, D)  # [B*T, D]
+            pred_encs = pred_encs.reshape(-1, D)  # [B*T, D]
         if target_encs.ndim == 3:
             B, T, D = target_encs.shape
-            target_encs = target_encs.view(-1, D)  # [B*T, D]
+            target_encs = target_encs.reshape(-1, D)  # [B*T, D]
 
         # Apply BatchNorm
         pred_encs = self.batch_norm(pred_encs)
@@ -172,10 +172,10 @@ class JEPA_Model(nn.Module):
         # Reshape to 2D for BatchNorm
         if pred_encs.ndim == 3:  # [B, T, D]
             B, T, D = pred_encs.shape
-            pred_encs = pred_encs.view(-1, D)  # Flatten to [B*T, D]
+            pred_encs = pred_encs.reshape(-1, D)  # Flatten to [B*T, D]
         if target_encs.ndim == 3:  # [B, T, D]
             B, T, D = target_encs.shape
-            target_encs = target_encs.view(-1, D)  # Flatten to [B*T, D]
+            target_encs = target_encs.reshape(-1, D)  # Flatten to [B*T, D]
 
         # Apply BatchNorm
         pred_encs = self.batch_norm(pred_encs)
