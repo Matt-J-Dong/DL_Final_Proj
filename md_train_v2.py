@@ -7,7 +7,7 @@ from tqdm.auto import tqdm
 import os
 from torch.utils.data import random_split, DataLoader
 from dataset import create_wall_dataloader
-from models_md_1 import JEPA_Model
+from models_md_v2 import JEPA_Model
 from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR
 import wandb
 from dotenv import load_dotenv
