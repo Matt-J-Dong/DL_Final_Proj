@@ -156,7 +156,7 @@ def main():
         "lambda_var": 1.0,
         "lambda_cov": 0.05,
         "max_grad_norm": 1.0,
-        "min_variance": 0.1,
+        "min_variance": 1.0,
         "save_every": 1,
         'margin': 0.5,
         'lambda_contrastive': 0.0,
