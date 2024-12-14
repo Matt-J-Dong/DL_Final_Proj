@@ -1,3 +1,22 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from tqdm.auto import tqdm
+import os
+
+from dataset import create_wall_dataloader
+from models_md_q import SingleLinearModel
+from torch.utils.data import Subset
+import random
+
+def get_device():
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+    else:
+        device = torch.device('cpu')
+    print(f"Using device: {device}")
+    return device
+
 def main():
     device = get_device()
 
