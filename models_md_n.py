@@ -1,30 +1,39 @@
-# models_md_h.py
+# models_md_h_energy_reg.py
 from typing import List
 import torch
 import torch.nn as nn
 import numpy as np
 
 class Encoder(nn.Module):
-    def __init__(self, output_dim=256, input_channels=2):
+    def __init__(self, output_dim=512, input_channels=2):
         super(Encoder, self).__init__()
-        # Simple CNN architecture inspired by BYOL (you can adjust as needed)
+        # Expanded CNN architecture inspired by BYOL with increased depth and width
         self.encoder = nn.Sequential(
-            nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False),
-            nn.BatchNorm2d(64),
+            # Block 1
+            nn.Conv2d(input_channels, 128, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
 
-            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-
+            # Block 2
             nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
 
+            # Block 3
+            nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+
+            # Block 4
+            nn.Conv2d(512, 1024, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(1024),
+            nn.ReLU(inplace=True),
+
+            # Global Average Pooling and Projection
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            nn.Linear(256, output_dim),
+            nn.Linear(1024, output_dim),
             nn.LayerNorm(output_dim)
         )
     
@@ -32,7 +41,7 @@ class Encoder(nn.Module):
         return self.encoder(x)
 
 class Predictor(nn.Module):
-    def __init__(self, input_dim=256, hidden_dim=512, output_dim=256, dropout=0.3):
+    def __init__(self, input_dim=512, hidden_dim=1024, output_dim=512, dropout=0.5):
         super(Predictor, self).__init__()
         self.predictor = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
@@ -46,13 +55,13 @@ class Predictor(nn.Module):
         return self.predictor(x)
 
 class JEPA_Model(nn.Module):
-    def __init__(self, device="cuda", repr_dim=256, action_dim=2, dropout=0.3):
+    def __init__(self, device="cuda", repr_dim=512, action_dim=2, dropout=0.5):
         super(JEPA_Model, self).__init__()
         self.device = device
         self.repr_dim = repr_dim
         self.action_dim = action_dim
         self.encoder = Encoder(output_dim=repr_dim, input_channels=2).to(device)
-        self.predictor = Predictor(input_dim=repr_dim + action_dim, hidden_dim=512, output_dim=repr_dim, dropout=dropout).to(device)
+        self.predictor = Predictor(input_dim=repr_dim + action_dim, hidden_dim=1024, output_dim=repr_dim, dropout=dropout).to(device)
         self.target_encoder = Encoder(output_dim=repr_dim, input_channels=2).to(device)
         self.target_encoder.load_state_dict(self.encoder.state_dict())
         for param in self.target_encoder.parameters():
@@ -110,6 +119,7 @@ class JEPA_Model(nn.Module):
         Modified train_step to include energy-based regularization.
         Args:
             labels (torch.Tensor): Binary labels indicating good (0) or bad (1) inputs.
+            target_average (float): Desired average energy loss.
         """
         B, T, C, H, W = states.shape
 
@@ -148,9 +158,6 @@ class JEPA_Model(nn.Module):
         with torch.no_grad():
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
-            dummy_matrix = torch.rand(65536, 65536, device='cuda')
-            for _ in range(5000):  # Perform the computation 5 times
-                dummy_result = torch.matmul(dummy_matrix, dummy_matrix)
 
         # Return energy loss and regularization loss
         return energy.mean().item(), energy_reg.item(), loss.item(), pred_encs
