@@ -11,9 +11,7 @@ from models_md import JEPA_Model
 from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR
 import wandb
 from dotenv import load_dotenv
-
-# Import ProbingConfig and ProbingEvaluator from evaluator_md.py
-from evaluator_md import ProbingConfig, ProbingEvaluator  # Changed import source
+from evaluator_md import ProbingConfig, ProbingEvaluator #This is the correct import path
 
 load_dotenv()
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")
@@ -60,25 +58,19 @@ class Trainer:
 
         val_loader = {"normal": probe_val_normal_ds, "wall": probe_val_wall_ds}
 
-        # Split both loaders' datasets consistently
         full_train_dataset = train_loader.dataset
-        #full_val_dataset = val_loader.dataset
-
         train_size = int(self.config["split_ratio"] * len(full_train_dataset))
         val_size = len(full_train_dataset) - train_size
 
         # Ensure consistent splits by using the same generator
         generator = torch.Generator().manual_seed(42)
         train_subset, _ = random_split(full_train_dataset, [train_size, val_size], generator=generator)
-        # _, val_subset = random_split(full_val_dataset, [train_size, val_size], generator=generator)
 
         # Update DataLoaders with subsets
         train_loader = DataLoader(train_subset, batch_size=self.config["batch_size"], shuffle=True)
-        # val_loader = DataLoader(val_subset, batch_size=self.config["batch_size"], shuffle=False)
 
         # Store datasets for probing evaluation
         self.train_dataset = train_subset
-        # self.val_dataset = val_subset
 
         return train_loader, val_loader
 

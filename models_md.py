@@ -17,7 +17,7 @@ def build_mlp(layers_dims: List[int]):
 
 
 class Encoder(nn.Module):
-    def __init__(self, output_dim=256, dropout_prob=0.1):
+    def __init__(self, output_dim=256, dropout_prob=0.0):
         super(Encoder, self).__init__()
         self.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
