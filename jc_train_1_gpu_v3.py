@@ -84,7 +84,7 @@ class Trainer:
 
         for epoch in range(1, self.config["num_epochs"] + 1):
             print(f"Epoch {epoch}, Learning Rate: {optimizer.param_groups[0]['lr']}")
-            wandb.log({"lr": optimizer.param_groups[0]['lr']})
+            # wandb.log({"lr": optimizer.param_groups[0]['lr']})
             epoch_loss = 0.0
             model.train()
 
@@ -95,6 +95,7 @@ class Trainer:
                     states=states,
                     actions=actions,
                     optimizer=optimizer,
+                    scheduler=scheduler,
                     debug=True,
                     **self.config
                 )
@@ -105,7 +106,8 @@ class Trainer:
                                "energy_loss": e_loss, 
                                "variance_loss": var_loss, 
                                "covariance_loss": cov_loss,
-                               "contrastive_loss": contra_loss})
+                               "contrastive_loss": contra_loss,
+                               'lr': optimizer.param_groups[0]['lr']})
 
                 if batch_idx % 100 == 0:
                     print(f"Epoch [{epoch}/{self.config['num_epochs']}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}")

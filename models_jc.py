@@ -260,7 +260,8 @@ class JEPA_Model(nn.Module):
     def train_step(self, 
                    states, 
                    actions, 
-                   optimizer, 
+                   optimizer,
+                   scheduler, 
                    momentum=0.99, 
                    distance_function="l2", 
                    lambda_energy=1.0, 
@@ -326,6 +327,7 @@ class JEPA_Model(nn.Module):
         torch.nn.utils.clip_grad_norm_(self.parameters(), max_grad_norm)
 
         optimizer.step()
+        scheduler.step()
 
         # Update target encoder using momentum
         with torch.no_grad():
