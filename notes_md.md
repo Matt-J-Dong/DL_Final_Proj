@@ -8,4 +8,11 @@ Version f builds on it with new hyperparameters.
 
 
 c12m85-a100-1
-srun --account=csci_ga_2572-2024fa --partition=c12m85-a100-1 --gres=gpu:a100:1 --cpus-per-task=4 --time=08:00:00 --pty /bin/bash
+srun --account=csci_ga_2572-2024fa --partition=c12m85-a100-1 --gres=gpu:a100:1 --cpus-per-task=4 --time=08:00:00 --pty /bin/bash\
+
+
+again: normal loss: 259.8260803222656
+wall loss: 187.7458038330078
+
+v1: normal loss: 260.63848876953125
+wall loss: 186.7103271484375
