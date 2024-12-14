@@ -141,16 +141,24 @@ class JEPA_Model(nn.Module):
 
     def variance_regularization(self, pred_encs, target_encs, epsilon=1e-4, min_variance=1.0):
         # Reshape to 2D for BatchNorm
-        if pred_encs.ndim == 3:
+        if pred_encs.ndim == 3:  # [B, T, D]
             B, T, D = pred_encs.shape
-            pred_encs = pred_encs.reshape(-1, D)  # [B*T, D]
-        if target_encs.ndim == 3:
+            pred_encs = pred_encs.reshape(-1, D)  # Flatten to [B*T, D]
+        else:
+            B, T, D = None, None, pred_encs.shape[0], pred_encs.shape[1]  # In case it's already 2D
+
+        if target_encs.ndim == 3:  # [B, T, D]
             B, T, D = target_encs.shape
-            target_encs = target_encs.reshape(-1, D)  # [B*T, D]
+            target_encs = target_encs.reshape(-1, D)  # Flatten to [B*T, D]
 
         # Apply BatchNorm
         pred_encs = self.batch_norm(pred_encs)
         target_encs = self.batch_norm(target_encs)
+
+        # Reshape back to original shape (if needed)
+        if B is not None and T is not None:
+            pred_encs = pred_encs.view(B, T, D)  # Reshape back to [B, T, D]
+            target_encs = target_encs.view(B, T, D)  # Reshape back to [B, T, D]
 
         # Combine embeddings
         states = torch.cat([pred_encs, target_encs], dim=0)
@@ -164,6 +172,7 @@ class JEPA_Model(nn.Module):
 
 
 
+
     def covariance_regularization(self, pred_encs, target_encs, epsilon=1e-4):
         def off_diagonal(matrix):
             # Helper to zero out diagonal and retain off-diagonal elements
@@ -173,6 +182,9 @@ class JEPA_Model(nn.Module):
         if pred_encs.ndim == 3:  # [B, T, D]
             B, T, D = pred_encs.shape
             pred_encs = pred_encs.reshape(-1, D)  # Flatten to [B*T, D]
+        else:
+            B, T, D = None, None, pred_encs.shape[0], pred_encs.shape[1]  # In case it's already 2D
+
         if target_encs.ndim == 3:  # [B, T, D]
             B, T, D = target_encs.shape
             target_encs = target_encs.reshape(-1, D)  # Flatten to [B*T, D]
@@ -180,6 +192,11 @@ class JEPA_Model(nn.Module):
         # Apply BatchNorm
         pred_encs = self.batch_norm(pred_encs)
         target_encs = self.batch_norm(target_encs)
+
+        # Reshape back to original shape (if needed)
+        if B is not None and T is not None:
+            pred_encs = pred_encs.view(B, T, D)  # Reshape back to [B, T, D]
+            target_encs = target_encs.view(B, T, D)  # Reshape back to [B, T, D]
 
         # Center embeddings (zero mean)
         pred_encs = pred_encs - pred_encs.mean(dim=0)
@@ -195,9 +212,8 @@ class JEPA_Model(nn.Module):
 
         # Combine covariance loss for both predicted and target embeddings
         cov_loss = off_diag_pred + off_diag_target
-
-        # Optional clamping (for stability)
         return torch.clamp(cov_loss, min=epsilon, max=10.0)
+
 
 
 
