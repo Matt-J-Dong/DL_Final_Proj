@@ -2,7 +2,8 @@ from typing import List
 import torch
 import torch.nn as nn
 import numpy as np
-from torchvision.models import resnet18
+# Removed ResNet import since we're replacing it with a custom CNN
+# from torchvision.models import resnet18
 
 def build_mlp(layers_dims: List[int], dropout=0.0):
     """Utility function to build an MLP with optional dropout."""
@@ -16,23 +17,51 @@ def build_mlp(layers_dims: List[int], dropout=0.0):
     layers.append(nn.Linear(layers_dims[-2], layers_dims[-1]))
     return nn.Sequential(*layers)
 
-class Encoder(nn.Module):
-    def __init__(self, output_dim=256, input_channels=2):
-        super(Encoder, self).__init__()
-        # Load ResNet-50 without pretrained weights
-        resnet = resnet18(pretrained=False)
-        # Modify the first convolutional layer to accept the required input channels
-        resnet.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        # Remove the final fully connected layer and average pooling
-        self.features = nn.Sequential(*list(resnet.children())[:-2])  # Exclude avgpool and fc
+class SmallCNN(nn.Module):
+    """
+    A smaller convolutional neural network to replace ResNet-18.
+    This network consists of three convolutional blocks followed by a fully connected layer
+    to produce the desired output embedding.
+    """
+    def __init__(self, input_channels=2, output_dim=256):
+        super(SmallCNN, self).__init__()
+        self.features = nn.Sequential(
+            # First Convolutional Block
+            nn.Conv2d(input_channels, 32, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+
+            # Second Convolutional Block
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+
+            # Third Convolutional Block
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))  # Global average pooling
-        self.fc = nn.Linear(resnet.fc.in_features, output_dim)  # Replace with custom FC layer
+        self.fc = nn.Linear(128, output_dim)  # Fully connected layer to output_dim
 
     def forward(self, x):
         x = self.features(x)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
+        return x
+
+class Encoder(nn.Module):
+    def __init__(self, output_dim=256, input_channels=2):
+        super(Encoder, self).__init__()
+        # Initialize the custom SmallCNN without pretrained weights
+        self.features = SmallCNN(input_channels=input_channels, output_dim=output_dim)
+    
+    def forward(self, x):
+        x = self.features(x)
         return x
 
 class Predictor(nn.Module):
