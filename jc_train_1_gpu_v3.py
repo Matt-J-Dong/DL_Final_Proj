@@ -82,8 +82,8 @@ class Trainer:
                                 step_size_up=2 * len(train_loader),
                                 mode='triangular2')
         
-        optimizer = torch.optim.SGD(model.parameters(), lr=self.config['learning_rate'], momentum=self.config['momentum'], weight_decay=1e-4)
-        scheduler = StepLR(optimizer, step_size=50, gamma=0.4)  # Reduce LR by 50% every 5 epochs
+        # optimizer = torch.optim.SGD(model.parameters(), lr=self.config['learning_rate'], momentum=self.config['momentum'], weight_decay=1e-4)
+        # scheduler = StepLR(optimizer, step_size=50, gamma=0.4)  # Reduce LR by 50% every 5 epochs
 
         for epoch in range(1, self.config["num_epochs"] + 1):
             print(f"Epoch {epoch}, Learning Rate: {optimizer.param_groups[0]['lr']}")
