@@ -7,7 +7,7 @@ from torch.utils.data import random_split, DataLoader
 from dataset import create_wall_dataloader
 from models_jc import JEPA_Model
 import torch.multiprocessing as mp
-from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR
 import wandb
 
 class Trainer:
@@ -81,6 +81,9 @@ class Trainer:
                                 max_lr=self.config["learning_rate"]*0.5,
                                 step_size_up=2 * len(train_loader),
                                 mode='triangular2')
+        
+        optimizer = torch.optim.SGD(model.parameters(), lr=self.config['learning_rate'], momentum=self.config['momentum'], weight_decay=1e-4)
+        scheduler = StepLR(optimizer, step_size=50, gamma=0.4)  # Reduce LR by 50% every 5 epochs
 
         for epoch in range(1, self.config["num_epochs"] + 1):
             print(f"Epoch {epoch}, Learning Rate: {optimizer.param_groups[0]['lr']}")
