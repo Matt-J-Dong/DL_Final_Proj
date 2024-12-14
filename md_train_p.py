@@ -45,12 +45,12 @@ def save_model(model, optimizer, epoch, batch_idx, learning_rate, dropout, lambd
     if batch_idx == -1:
         save_file = os.path.join(
             save_path,
-            f"jepa_model_c_epoch_{epoch}_final_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
+            f"jepa_model_p_epoch_{epoch}_final_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
         )
     else:
         save_file = os.path.join(
             save_path,
-            f"jepa_model_c_epoch_{epoch}_batch_{batch_idx}_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
+            f"jepa_model_p_epoch_{epoch}_batch_{batch_idx}_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
         )
 
     torch.save({
@@ -69,7 +69,7 @@ def load_latest_checkpoint(model, optimizer, learning_rate, dropout, lambda_cov,
     if not os.path.exists(checkpoint_dir):
         return 1, 0
 
-    pattern = f"jepa_model_c_epoch_*_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
+    pattern = f"jepa_model_p_epoch_*_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
     checkpoint_files = glob.glob(os.path.join(checkpoint_dir, pattern))
     if len(checkpoint_files) == 0:
         return 1, 0
@@ -229,7 +229,7 @@ def train_model(
             "momentum": momentum
         })
 
-        with open("losses_c.txt", "a") as f:
+        with open("losses_p.txt", "a") as f:
             f.write(f"Epoch {epoch}: train_loss={avg_epoch_loss}, val_loss_normal={val_loss_normal}, val_loss_wall={val_loss_wall}, probing_lr={current_probe_lr}\n")
 
         model.train()
@@ -256,7 +256,7 @@ def train_model(
     return model
 
 def main():
-    wandb.init(project="my_jepa_project_sweep")  # Start W&B run under a sweep agent
+    wandb.init(project="my_jepa_project_sweep_model_p")  # Start W&B run under a sweep agent
     device = get_device()
 
     # Hyperparameters from wandb.config (sweep)
