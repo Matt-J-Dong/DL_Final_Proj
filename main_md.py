@@ -58,6 +58,7 @@ def load_model():
         new_state_dict[name] = v
 
     model.load_state_dict(new_state_dict)
+    model.to(device)
     return model
 
 
