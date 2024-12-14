@@ -123,7 +123,7 @@ class JEPA_Model(nn.Module):
 
         self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim, hidden_dim=1024, dropout_prob=dropout_prob).to(device)
 
-        self.target_encoder = Encoder(output_dim=repr_dim, input_channels=2).to(device)
+        self.target_encoder = Encoder(output_dim=repr_dim).to(device)
 
         # BatchNorm for embeddings
         self.batch_norm = nn.BatchNorm1d(repr_dim)
