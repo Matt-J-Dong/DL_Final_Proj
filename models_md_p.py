@@ -1,90 +1,47 @@
-# models_md_o.py
-
-from typing import List
 import torch
 import torch.nn as nn
 import numpy as np
 
-def build_mlp(layers_dims: List[int], dropout=0.0):
-    """Utility function to build an MLP with optional dropout."""
-    layers = []
-    for i in range(len(layers_dims) - 2):
-        layers.append(nn.Linear(layers_dims[i], layers_dims[i + 1]))
-        layers.append(nn.BatchNorm1d(layers_dims[i + 1]))
-        layers.append(nn.ReLU(True))
-        if dropout > 0:
-            layers.append(nn.Dropout(p=dropout))
-    layers.append(nn.Linear(layers_dims[-2], layers_dims[-1]))
-    return nn.Sequential(*layers)
+def build_mlp(input_dim, hidden_dim, output_dim, dropout=0.0):
+    layers = [
+        nn.Linear(input_dim, hidden_dim),
+        nn.ReLU(True),
+        nn.Linear(hidden_dim, output_dim)
+    ]
+    if dropout > 0:
+        # Insert dropout after ReLU
+        return nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(True),
+            nn.Dropout(p=dropout),
+            nn.Linear(hidden_dim, output_dim)
+        )
+    else:
+        return nn.Sequential(*layers)
 
 class SimpleEncoder(nn.Module):
     def __init__(self, input_dim=8450, hidden_dim=128, output_dim=256, dropout=0.1):
-        """
-        A simple encoder using MLP layers.
-        
-        Args:
-            input_dim (int): Number of input features after flattening.
-            hidden_dim (int): Number of neurons in the hidden layer.
-            output_dim (int): Dimension of the output representation.
-            dropout (float): Dropout probability.
-        """
         super(SimpleEncoder, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(True),
-            nn.Dropout(p=dropout),
-            nn.Linear(hidden_dim, output_dim),
-            nn.LayerNorm(output_dim)
-        )
+        self.net = build_mlp(input_dim, hidden_dim, output_dim, dropout=dropout)
 
     def forward(self, x):
-        x = x.view(x.size(0), -1)  # Flatten the input: (B, C, H, W) -> (B, C*H*W)
-        x = self.encoder(x)
-        return x
+        # x: [B, 8450]
+        return self.net(x)
 
 class SimplePredictor(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=128, dropout=0.1):
-        """
-        A simple predictor using MLP layers with a residual connection.
-        
-        Args:
-            input_dim (int): Number of input features (representation + action).
-            output_dim (int): Dimension of the output representation.
-            hidden_dim (int): Number of neurons in the hidden layer.
-            dropout (float): Dropout probability.
-        """
+    def __init__(self, input_dim=258, output_dim=256, hidden_dim=128, dropout=0.1):
         super(SimplePredictor, self).__init__()
-        self.predictor = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU(True),
-            nn.Dropout(p=dropout),
-            nn.Linear(hidden_dim, output_dim),
-            nn.LayerNorm(output_dim)
-        )
-        self.residual = nn.Linear(input_dim, output_dim)  # Residual connection
+        self.net = build_mlp(input_dim, hidden_dim, output_dim, dropout=dropout)
 
     def forward(self, s_prev, u_prev):
-        """
-        Forward pass for the predictor.
-        
-        Args:
-            s_prev (torch.Tensor): Previous state representation.
-            u_prev (torch.Tensor): Previous action.
-
-        Returns:
-            torch.Tensor: Predicted next state representation.
-        """
-        x = torch.cat([s_prev, u_prev], dim=-1)  # Concatenate along feature dimension
-        res = self.residual(x)  # Residual connection
-        x = self.predictor(x)
-        return x + res
+        x = torch.cat([s_prev, u_prev], dim=-1)  # s_prev: [B, 256], u_prev: [B,2], total: [B,258]
+        return self.net(x)
 
 class JEPA_Model(nn.Module):
     def __init__(self, device="cuda", repr_dim=256, action_dim=2, dropout=0.1):
         """
         Joint Embedding Predictive Architecture (JEPA) model.
-        
+
         Args:
             device (str): Device to run the model on.
             repr_dim (int): Dimension of the representation space.
@@ -95,7 +52,7 @@ class JEPA_Model(nn.Module):
         self.device = device
         self.repr_dim = repr_dim
         self.action_dim = action_dim
-        self.encoder = SimpleEncoder(input_dim=8450, hidden_dim=128, output_dim=repr_dim, dropout=dropout).to(device) #Dimension is important to maintain
+        self.encoder = SimpleEncoder(input_dim=8450, hidden_dim=128, output_dim=repr_dim, dropout=dropout).to(device)
         self.predictor = SimplePredictor(input_dim=repr_dim + action_dim, output_dim=repr_dim, hidden_dim=128, dropout=dropout).to(device)
         self.target_encoder = SimpleEncoder(input_dim=8450, hidden_dim=128, output_dim=repr_dim, dropout=dropout).to(device)
         self.target_encoder.load_state_dict(self.encoder.state_dict())
@@ -148,12 +105,12 @@ class JEPA_Model(nn.Module):
         """
         Compute regularization loss to prevent energy collapse.
         Encourages the average energy to be close to target_average.
-        
+
         Args:
             energy (torch.Tensor): Energy values for each sample.
             target_average (float): Target average energy.
             lambda_reg (float): Weight for the regularization term.
-        
+
         Returns:
             torch.Tensor: Regularization loss.
         """
