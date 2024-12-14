@@ -289,7 +289,7 @@ def run_training():
     learning_rate = config.get("learning_rate", 1e-3)
     lambda_cov = config.get("lambda_cov", 0.1)
     momentum = config.get("momentum", 0.99)
-    batch_size = config.get("batch_size", 64)
+    batch_size = config.get("batch_size", 2048)
     probe_lr = config.get("probe_lr", 0.0002)
     num_epochs = config.get("epochs", 10)
     target_average = config.get("target_average", 1.0)
