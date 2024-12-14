@@ -140,34 +140,33 @@ class JEPA_Model(nn.Module):
 
 
     def variance_regularization(self, pred_encs, target_encs, epsilon=1e-4, min_variance=1.0):
-        # Reshape to 2D for BatchNorm
-        if pred_encs.ndim == 3:  # [B, T, D]
-            B, T, D = pred_encs.shape
-            pred_encs = pred_encs.reshape(-1, D)  # Flatten to [B*T, D]
-        else:
-            B, T, D = None, None, pred_encs.shape[0], pred_encs.shape[1]  # In case it's already 2D
+        # Ensure consistent 3D shape [B, T, D]
+        if pred_encs.ndim == 2:
+            pred_encs = pred_encs.unsqueeze(0)  # Add batch dimension
+        if target_encs.ndim == 2:
+            target_encs = target_encs.unsqueeze(0)  # Add batch dimension
 
-        if target_encs.ndim == 3:  # [B, T, D]
-            B, T, D = target_encs.shape
-            target_encs = target_encs.reshape(-1, D)  # Flatten to [B*T, D]
+        B, T, D = pred_encs.shape
+
+        # Reshape to 2D for computation: [B*T, D]
+        pred_encs = pred_encs.reshape(-1, D)
+        target_encs = target_encs.reshape(-1, D)
 
         # Apply BatchNorm
         pred_encs = self.batch_norm(pred_encs)
         target_encs = self.batch_norm(target_encs)
 
-        # Reshape back to original shape (if needed)
-        if B is not None and T is not None:
-            pred_encs = pred_encs.view(B, T, D)  # Reshape back to [B, T, D]
-            target_encs = target_encs.view(B, T, D)  # Reshape back to [B, T, D]
+        # Compute variance separately
+        pred_std_x = torch.sqrt(pred_encs.var(dim=0) + epsilon)
+        target_std_x = torch.sqrt(target_encs.var(dim=0) + epsilon)
 
-        # Combine embeddings
-        states = torch.cat([pred_encs, target_encs], dim=0)
+        # Penalize low variance for both predicted and target encodings
+        pred_variance_loss = torch.mean(torch.relu(min_variance - pred_std_x))
+        target_variance_loss = torch.mean(torch.relu(min_variance - target_std_x))
 
-        # Compute variance
-        std_x = torch.sqrt(states.var(dim=0) + epsilon)
-
-        # Penalize low variance
-        variance_loss = torch.mean(torch.relu(min_variance - std_x))
+        # Sum the variance losses
+        variance_loss = pred_variance_loss + target_variance_loss
+        
         return variance_loss
 
 
@@ -178,25 +177,21 @@ class JEPA_Model(nn.Module):
             # Helper to zero out diagonal and retain off-diagonal elements
             return matrix - torch.diag_embed(torch.diagonal(matrix))
 
-        # Reshape to 2D for BatchNorm
-        if pred_encs.ndim == 3:  # [B, T, D]
-            B, T, D = pred_encs.shape
-            pred_encs = pred_encs.reshape(-1, D)  # Flatten to [B*T, D]
-        else:
-            B, T, D = None, None, pred_encs.shape[0], pred_encs.shape[1]  # In case it's already 2D
+        # Ensure consistent 3D shape [B, T, D]
+        if pred_encs.ndim == 2:
+            pred_encs = pred_encs.unsqueeze(0)  # Add batch dimension
+        if target_encs.ndim == 2:
+            target_encs = target_encs.unsqueeze(0)  # Add batch dimension
 
-        if target_encs.ndim == 3:  # [B, T, D]
-            B, T, D = target_encs.shape
-            target_encs = target_encs.reshape(-1, D)  # Flatten to [B*T, D]
+        B, T, D = pred_encs.shape
+
+        # Reshape to 2D for computation: [B*T, D]
+        pred_encs = pred_encs.reshape(-1, D)
+        target_encs = target_encs.reshape(-1, D)
 
         # Apply BatchNorm
         pred_encs = self.batch_norm(pred_encs)
         target_encs = self.batch_norm(target_encs)
-
-        # Reshape back to original shape (if needed)
-        if B is not None and T is not None:
-            pred_encs = pred_encs.view(B, T, D)  # Reshape back to [B, T, D]
-            target_encs = target_encs.view(B, T, D)  # Reshape back to [B, T, D]
 
         # Center embeddings (zero mean)
         pred_encs = pred_encs - pred_encs.mean(dim=0)
@@ -213,11 +208,6 @@ class JEPA_Model(nn.Module):
         # Combine covariance loss for both predicted and target embeddings
         cov_loss = off_diag_pred + off_diag_target
         return torch.clamp(cov_loss, min=epsilon, max=10.0)
-
-
-
-
-
 
 
 
