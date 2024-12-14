@@ -2,7 +2,7 @@ import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 from dataset import create_wall_dataloader
-from model import JEPA_Model
+from models_md_o import JEPA_Model
 
 def main():
     device = torch.device("cpu")  # CPU-only run
