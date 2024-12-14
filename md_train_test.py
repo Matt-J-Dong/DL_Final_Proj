@@ -71,6 +71,30 @@ class Trainer:
 
         train_loader = DataLoader(train_dataset, batch_size=self.config["batch_size"], shuffle=True)
 
+        # Debugging: Inspect the shapes of 'locations' in each DataLoader
+        print("\n--- Debugging DataLoader Shapes ---")
+
+        # Function to print the shape of 'locations' from a DataLoader
+        def inspect_dataloader(dataloader, name):
+            try:
+                batch = next(iter(dataloader))
+                locations = getattr(batch, "locations", None)
+                if locations is not None:
+                    print(f"{name} 'locations' shape: {locations.shape}")
+                else:
+                    print(f"{name} does not have 'locations' attribute.")
+            except Exception as e:
+                print(f"Error inspecting {name} DataLoader: {e}")
+
+        # Inspect Training DataLoader
+        inspect_dataloader(train_loader, "Training")
+
+        # Inspect Validation DataLoaders
+        inspect_dataloader(probe_val_normal_ds, "Validation Normal")
+        inspect_dataloader(probe_val_wall_ds, "Validation Wall")
+
+        print("--- End of Debugging DataLoader Shapes ---\n")
+
         return train_loader, val_loader
 
     def save_model(self, model, epoch):
@@ -109,8 +133,34 @@ class Trainer:
         # Override probe_lr from config
         evaluator.config.lr = probe_lr
 
-        # Train the probing model
-        prober = evaluator.train_pred_prober()
+        # Debugging: Wrap the call to train_pred_prober in a try-except block
+        try:
+            # Train the probing model
+            prober = evaluator.train_pred_prober()
+        except IndexError as e:
+            print(f"\nIndexError encountered during probing training: {e}")
+            print("Inspecting 'locations' tensor in training dataset:")
+            # Inspect a sample from the training dataset
+            if hasattr(self.train_dataset, '__getitem__'):
+                sample = self.train_dataset[0]
+                locations = getattr(sample, "locations", None)
+                if locations is not None:
+                    print(f"Training sample 'locations' shape: {locations.shape}")
+                else:
+                    print("Training sample does not have 'locations' attribute.")
+            print("Inspecting 'locations' tensors in validation datasets:")
+            for key, val_ds in self.val_loader.items():
+                if hasattr(val_ds, '__iter__'):
+                    try:
+                        val_sample = next(iter(val_ds))
+                        locations = getattr(val_sample, "locations", None)
+                        if locations is not None:
+                            print(f"Validation '{key}' sample 'locations' shape: {locations.shape}")
+                        else:
+                            print(f"Validation '{key}' sample does not have 'locations' attribute.")
+                    except Exception as ex:
+                        print(f"Error accessing validation '{key}' dataset: {ex}")
+            raise e  # Re-raise the exception after debugging
 
         # Evaluate the probing model
         avg_losses = evaluator.evaluate_all(prober=prober)
