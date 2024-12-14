@@ -152,9 +152,9 @@ class JEPA_Model(nn.Module):
 
         # Reshape to 2D if necessary
         if pred_encs.ndim == 3:
-            pred_encs = pred_encs.view(-1, pred_encs.size(-1))  # [Batch * Time, Embedding]
+            pred_encs = pred_encs.reshape(-1, pred_encs.size(-1))  # [Batch * Time, Embedding]
         if target_encs.ndim == 3:
-            target_encs = target_encs.view(-1, target_encs.size(-1))  # [Batch * Time, Embedding]
+            target_encs = target_encs.reshape(-1, target_encs.size(-1))  # [Batch * Time, Embedding]
 
         # Center predicted embeddings
         pred_encs = pred_encs - pred_encs.mean(dim=0)
