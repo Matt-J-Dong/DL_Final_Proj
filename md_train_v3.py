@@ -274,11 +274,11 @@ class Trainer:
 def main():
     config = {
         "batch_size": 256,
-        "num_epochs": 4,
-        "learning_rate": 5e-5,
+        "num_epochs": 7,
+        "learning_rate": 5e-4,
         'step_per_epoch': 1000,
         "momentum": 0.996,
-        "split_ratio": 0.9,
+        "split_ratio": 1.0,
         "lambda_energy": 1.0,
         "lambda_var": 0.0,
         "lambda_cov": 0.0,
