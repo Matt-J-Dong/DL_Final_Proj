@@ -21,14 +21,14 @@ class Encoder(nn.Module):
     Recurrent Neural Network (RNN) based Encoder.
     Replaces the previous CNN-based Encoder to process image data as sequences.
     """
-    def __init__(self, output_dim=256, dropout_prob=0.0):
+    def __init__(self, output_dim=128, dropout_prob=0.0):
         super(Encoder, self).__init__()
         self.output_dim = output_dim
         self.dropout_prob = dropout_prob
 
         # Define RNN parameters
         self.input_size = 2  # Number of channels in input (C=2)
-        self.hidden_size = 128  # Hidden size for LSTM
+        self.hidden_size = 64  # Hidden size for LSTM
         self.num_layers = 2  # Number of LSTM layers
 
         # Define LSTM layer
@@ -71,7 +71,7 @@ class Encoder(nn.Module):
 
 
 class Predictor(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=1024, dropout_prob=0.1):
+    def __init__(self, input_dim, output_dim, hidden_dim=512, dropout_prob=0.0):
         super(Predictor, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.bn1 = nn.BatchNorm1d(hidden_dim)
@@ -92,7 +92,7 @@ class Predictor(nn.Module):
 
 
 class Expander(nn.Module):
-    def __init__(self, input_dim=256, hidden_dim=1024, output_dim=256, dropout_prob=0.1):
+    def __init__(self, input_dim=128, hidden_dim=512, output_dim=128, dropout_prob=0.0):
         super(Expander, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.bn1 = nn.BatchNorm1d(hidden_dim)
@@ -118,7 +118,7 @@ class Expander(nn.Module):
 
 
 class JEPA_Model(nn.Module):
-    def __init__(self, device="cuda", repr_dim=256, action_dim=2, dropout_prob=0.1):
+    def __init__(self, device="cuda", repr_dim=128, action_dim=2, dropout_prob=0.0):
         super(JEPA_Model, self).__init__()
         self.device = device
         self.repr_dim = repr_dim
@@ -127,9 +127,9 @@ class JEPA_Model(nn.Module):
 
         self.encoder = Encoder(output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
 
-        self.expander = Expander(input_dim=repr_dim, hidden_dim=1024, output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
+        self.expander = Expander(input_dim=repr_dim, hidden_dim=512, output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
 
-        self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim, hidden_dim=1024, dropout_prob=dropout_prob).to(device)
+        self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim, hidden_dim=512, dropout_prob=dropout_prob).to(device)
 
         self.target_encoder = Encoder(output_dim=repr_dim).to(device)
 
