@@ -45,7 +45,7 @@ class SmallCNN(nn.Module):
             # nn.MaxPool2d(kernel_size=2, stride=2),
         )
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))  # Global average pooling
-        self.fc = nn.Linear(64, output_dim)  # Fully connected layer to output_dim
+        self.fc = nn.Linear(16, output_dim)  # Fully connected layer to output_dim
 
     def forward(self, x):
         x = self.features(x)
