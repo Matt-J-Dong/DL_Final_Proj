@@ -113,7 +113,7 @@ class Trainer:
     def save_model(self, model, epoch):
         save_path = self.config.get("save_path", "checkpoints")
         os.makedirs(save_path, exist_ok=True)
-        save_file = os.path.join(save_path, f"jepa_model_again_testing_epoch_{epoch}.pth")
+        save_file = os.path.join(save_path, f"jepa_model_testing_1_epoch_{epoch}.pth")
         torch.save(model.state_dict(), save_file)
         print(f"Model saved to {save_file}")
 
