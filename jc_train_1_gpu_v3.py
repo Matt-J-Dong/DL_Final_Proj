@@ -153,11 +153,11 @@ def main():
         "lambda_energy": 1.0,
         "lambda_var": 25.0,
         "lambda_cov": 1.0,
+        'lambda_contrastive': 1.0,
         "max_grad_norm": 0.5,
         "min_variance": 1.0,
         "save_every": 1,
-        'margin': 0.5,
-        'lambda_contrastive': 0.0,
+        'margin': 1.0,
         'distance_function': 'l2',
     }
 
