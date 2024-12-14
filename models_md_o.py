@@ -1,3 +1,5 @@
+# models_md_o.py
+
 from typing import List
 import torch
 import torch.nn as nn
@@ -16,7 +18,16 @@ def build_mlp(layers_dims: List[int], dropout=0.0):
     return nn.Sequential(*layers)
 
 class SimpleEncoder(nn.Module):
-    def __init__(self, input_dim=784, hidden_dim=512, output_dim=256, dropout=0.1):
+    def __init__(self, input_dim=8450, hidden_dim=128, output_dim=256, dropout=0.1):
+        """
+        A simple encoder using MLP layers.
+        
+        Args:
+            input_dim (int): Number of input features after flattening.
+            hidden_dim (int): Number of neurons in the hidden layer.
+            output_dim (int): Dimension of the output representation.
+            dropout (float): Dropout probability.
+        """
         super(SimpleEncoder, self).__init__()
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
@@ -27,12 +38,21 @@ class SimpleEncoder(nn.Module):
         )
 
     def forward(self, x):
-        x = x.view(x.size(0), -1)  # Flatten the input
+        x = x.view(x.size(0), -1)  # Flatten the input: (B, C, H, W) -> (B, C*H*W)
         x = self.encoder(x)
         return x
 
 class SimplePredictor(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=512, dropout=0.1):
+    def __init__(self, input_dim, output_dim, hidden_dim=128, dropout=0.1):
+        """
+        A simple predictor using MLP layers with a residual connection.
+        
+        Args:
+            input_dim (int): Number of input features (representation + action).
+            output_dim (int): Dimension of the output representation.
+            hidden_dim (int): Number of neurons in the hidden layer.
+            dropout (float): Dropout probability.
+        """
         super(SimplePredictor, self).__init__()
         self.predictor = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
@@ -45,20 +65,39 @@ class SimplePredictor(nn.Module):
         self.residual = nn.Linear(input_dim, output_dim)  # Residual connection
 
     def forward(self, s_prev, u_prev):
-        x = torch.cat([s_prev, u_prev], dim=-1)
+        """
+        Forward pass for the predictor.
+        
+        Args:
+            s_prev (torch.Tensor): Previous state representation.
+            u_prev (torch.Tensor): Previous action.
+
+        Returns:
+            torch.Tensor: Predicted next state representation.
+        """
+        x = torch.cat([s_prev, u_prev], dim=-1)  # Concatenate along feature dimension
         res = self.residual(x)  # Residual connection
         x = self.predictor(x)
         return x + res
 
 class JEPA_Model(nn.Module):
     def __init__(self, device="cuda", repr_dim=256, action_dim=2, dropout=0.1):
+        """
+        Joint Embedding Predictive Architecture (JEPA) model.
+        
+        Args:
+            device (str): Device to run the model on.
+            repr_dim (int): Dimension of the representation space.
+            action_dim (int): Dimension of the action space.
+            dropout (float): Dropout probability.
+        """
         super(JEPA_Model, self).__init__()
         self.device = device
         self.repr_dim = repr_dim
         self.action_dim = action_dim
-        self.encoder = SimpleEncoder(input_dim=2, hidden_dim=128, output_dim=repr_dim, dropout=dropout).to(device)
+        self.encoder = SimpleEncoder(input_dim=8450, hidden_dim=128, output_dim=repr_dim, dropout=dropout).to(device)
         self.predictor = SimplePredictor(input_dim=repr_dim + action_dim, output_dim=repr_dim, hidden_dim=128, dropout=dropout).to(device)
-        self.target_encoder = SimpleEncoder(input_dim=2, hidden_dim=128, output_dim=repr_dim, dropout=dropout).to(device)
+        self.target_encoder = SimpleEncoder(input_dim=8450, hidden_dim=128, output_dim=repr_dim, dropout=dropout).to(device)
         self.target_encoder.load_state_dict(self.encoder.state_dict())
         for param in self.target_encoder.parameters():
             param.requires_grad = False
@@ -97,22 +136,47 @@ class JEPA_Model(nn.Module):
 
     def compute_energy(self, predicted_encs, target_encs, distance_function="l2"):
         # Compute per-sample energy
-        energy = ((predicted_encs - target_encs) ** 2).sum(dim=-1).mean(dim=-1)  # (B)
+        if distance_function == "l2":
+            energy = ((predicted_encs - target_encs) ** 2).sum(dim=-1).mean(dim=-1)  # (B)
+        elif distance_function == "cosine":
+            energy = 1 - torch.cosine_similarity(predicted_encs, target_encs, dim=-1)  # (B)
+        else:
+            raise ValueError(f"Unsupported distance function: {distance_function}")
         return energy
 
     def compute_energy_regularization(self, energy, target_average=1.0, lambda_reg=0.5):
         """
         Compute regularization loss to prevent energy collapse.
         Encourages the average energy to be close to target_average.
+        
+        Args:
+            energy (torch.Tensor): Energy values for each sample.
+            target_average (float): Target average energy.
+            lambda_reg (float): Weight for the regularization term.
+        
+        Returns:
+            torch.Tensor: Regularization loss.
         """
         reg_loss = torch.mean(torch.relu(target_average - energy))
         return lambda_reg * reg_loss
 
     def train_step(self, states, actions, labels, optimizer, momentum=0.99, distance_function="l2", add_noise=False, lambda_cov=0.5, target_average=1.0):
         """
-        Modified train_step to include energy-based regularization.
+        Perform a single training step.
+        
         Args:
+            states (torch.Tensor): Input states.
+            actions (torch.Tensor): Actions taken.
             labels (torch.Tensor): Binary labels indicating good (0) or bad (1) inputs.
+            optimizer (torch.optim.Optimizer): Optimizer.
+            momentum (float): Momentum for the target encoder update.
+            distance_function (str): Distance function to compute energy ('l2' or 'cosine').
+            add_noise (bool): Whether to add noise to the states.
+            lambda_cov (float): Weight for covariance regularization.
+            target_average (float): Target average energy for regularization.
+        
+        Returns:
+            Tuple[float, float, float, torch.Tensor]: Energy loss, energy regularization loss, total loss, predicted encodings.
         """
         B, T, C, H, W = states.shape
 
@@ -122,7 +186,7 @@ class JEPA_Model(nn.Module):
 
         # Random horizontal flip with 50% chance for data augmentation
         if torch.rand(1).item() < 0.5:
-            states = torch.flip(states, dims=[3])
+            states = torch.flip(states, dims=[3])  # Assuming H is dim 3
 
         init_state = states[:, 0]
         pred_encs = self.forward(init_state, actions)
@@ -162,6 +226,14 @@ class Prober(torch.nn.Module):
         arch: str,
         output_shape: List[int],
     ):
+        """
+        Prober module for evaluating representations.
+        
+        Args:
+            embedding (int): Dimension of the embedding.
+            arch (str): Architecture specification (e.g., "256-128").
+            output_shape (List[int]): Shape of the output.
+        """
         super().__init__()
         self.output_dim = np.prod(output_shape)
         self.output_shape = output_shape
