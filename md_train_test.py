@@ -1,4 +1,4 @@
-# md_train.py
+# md_train_test.py
 
 import torch
 import torch.nn as nn
@@ -32,27 +32,30 @@ class Trainer:
     def load_data(self):
         data_path = "/scratch/DL24FA"
 
+        # Create Training DataLoader
         full_loader = create_wall_dataloader(
             data_path=f"{data_path}/train",
             probing=False,
             device=self.device,
             train=True,
-            batch_size=self.config["batch_size"],
+            batch_size=self.config["batch_size"],  # Ensure batch_size is specified
         )
 
-        # Create Validation DataLoader with probing=True
+        # Create Validation DataLoaders with probing=True and specified batch_size
         probe_val_normal_ds = create_wall_dataloader(
             data_path=f"{data_path}/probe_normal/val",
             probing=True,
-            device=device,
+            device=self.device,
             train=False,
+            batch_size=self.config["batch_size"],  # **Added batch_size**
         )
 
         probe_val_wall_ds = create_wall_dataloader(
             data_path=f"{data_path}/probe_wall/val",
             probing=True,
-            device=device,
+            device=self.device,
             train=False,
+            batch_size=self.config["batch_size"],  # **Added batch_size**
         )
 
         val_loader = {"normal": probe_val_normal_ds, "wall": probe_val_wall_ds}
@@ -60,7 +63,7 @@ class Trainer:
         full_dataset = full_loader.dataset
         train_size = int(self.config["split_ratio"] * len(full_dataset))
         val_size = len(full_dataset) - train_size
-        train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+        train_dataset, _ = random_split(full_dataset, [train_size, val_size])
 
         # Save datasets for probing
         self.train_dataset = train_dataset
@@ -98,7 +101,7 @@ class Trainer:
             device=self.device,
             model=model,
             probe_train_ds=self.train_dataset,  # Using the training dataset for probing
-            probe_val_ds=self.val_loader,      # Using the validation dataset for probing
+            probe_val_ds=self.val_loader,      # Using the validation datasets for probing
             config=probing_config,
             quick_debug=False
         )
@@ -232,4 +235,4 @@ def main():
     trainer.train()
 
 if __name__ == "__main__":
-        main()
+    main()
