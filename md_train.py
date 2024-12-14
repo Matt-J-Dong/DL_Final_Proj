@@ -11,7 +11,7 @@ import wandb
 from dotenv import load_dotenv
 
 # Added imports for probing evaluation
-from evaluator import ProbingConfig, ProbingEvaluator
+from evaluator_md import ProbingConfig, ProbingEvaluator
 
 load_dotenv()
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")
