@@ -118,14 +118,13 @@ class JEPA_Model(nn.Module):
         reg_loss = torch.mean(torch.relu(target_average - energy))
         return lambda_reg * reg_loss
 
-    def train_step(self, states, actions, labels, optimizer, momentum=0.99, distance_function="l2", add_noise=False, lambda_cov=0.5, target_average=1.0):
+    def train_step(self, states, actions, optimizer, momentum=0.99, distance_function="l2", add_noise=False, lambda_cov=0.5, target_average=1.0):
         """
         Perform a single training step.
         
         Args:
             states (torch.Tensor): Input states.
             actions (torch.Tensor): Actions taken.
-            labels (torch.Tensor): Binary labels indicating good (0) or bad (1) inputs.
             optimizer (torch.optim.Optimizer): Optimizer.
             momentum (float): Momentum for the target encoder update.
             distance_function (str): Distance function to compute energy ('l2' or 'cosine').
