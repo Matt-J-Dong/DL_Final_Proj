@@ -8,7 +8,7 @@ import glob
 import torch.multiprocessing as mp
 
 from dataset import create_wall_dataloader
-from models_md_q import JEPA_Model
+from models_md_q import RecurrentJEPA_Model
 from evaluator import ProbingEvaluator, ProbingConfig
 from dotenv import load_dotenv
 import wandb
