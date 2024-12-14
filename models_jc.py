@@ -94,16 +94,21 @@ class JEPA_Model(nn.Module):
         self.dropout_prob = dropout_prob
 
         self.encoder = Encoder(output_dim=repr_dim, input_channels=2, dropout_prob=dropout_prob).to(device)
-        
-        # Add the expander after the encoder
+
         self.expander = Expander(input_dim=repr_dim, hidden_dim=1024, output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
-        
+
         self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim, hidden_dim=1024, dropout_prob=dropout_prob).to(device)
-        
+
         self.target_encoder = Encoder(output_dim=repr_dim, input_channels=2).to(device)
+
+        # BatchNorm for embeddings
+        self.batch_norm = nn.BatchNorm1d(repr_dim)
+
+        # Load encoder weights into target encoder
         self.target_encoder.load_state_dict(self.encoder.state_dict())
         for param in self.target_encoder.parameters():
             param.requires_grad = False
+
 
     def forward(self, init_state, actions):
         """
@@ -120,35 +125,46 @@ class JEPA_Model(nn.Module):
 
         s_prev = self.encoder(init_state)
         s_prev = self.expander(s_prev)  # Pass encoder output through expander
+        s_prev = self.batch_norm(s_prev)  # Apply BatchNorm to embeddings
         pred_encs.append(s_prev)
 
         for t in range(T_minus_one):
             u_prev = actions[:, t]
             s_pred = self.predictor(s_prev, u_prev)
+            s_pred = self.batch_norm(s_pred)  # Apply BatchNorm to embeddings
             pred_encs.append(s_pred)
             s_prev = s_pred
 
         pred_encs = torch.stack(pred_encs, dim=1)
         return pred_encs
 
+
     def variance_regularization(self, pred_encs, target_encs, epsilon=1e-4, min_variance=1.0):
+        # Apply BatchNorm
+        pred_encs = self.batch_norm(pred_encs)
+        target_encs = self.batch_norm(target_encs)
+
         # Combine predicted and target embeddings
         states = torch.cat([pred_encs, target_encs], dim=0)
-        
+
         # Compute variance for each dimension
         if states.ndim == 3:
             states = states.view(-1, states.size(-1))
         std_x = torch.sqrt(states.var(dim=0) + epsilon)
-        
+
         # Penalize dimensions with variance below the threshold
         variance_loss = torch.mean(torch.relu(min_variance - std_x))
         return variance_loss
 
 
+
     def covariance_regularization(self, pred_encs, target_encs, epsilon=1e-4):
         def off_diagonal(matrix):
-            # Helper to zero out diagonal and retain off-diagonal elements
             return matrix - torch.diag_embed(torch.diagonal(matrix))
+
+        # Apply BatchNorm
+        pred_encs = self.batch_norm(pred_encs)
+        target_encs = self.batch_norm(target_encs)
 
         # Reshape to 2D if necessary
         if pred_encs.ndim == 3:
@@ -156,10 +172,8 @@ class JEPA_Model(nn.Module):
         if target_encs.ndim == 3:
             target_encs = target_encs.reshape(-1, target_encs.size(-1))  # [Batch * Time, Embedding]
 
-        # Center predicted embeddings
+        # Center predicted and target embeddings
         pred_encs = pred_encs - pred_encs.mean(dim=0)
-
-        # Center target embeddings
         target_encs = target_encs - target_encs.mean(dim=0)
 
         # Compute covariance matrices
@@ -172,9 +186,8 @@ class JEPA_Model(nn.Module):
 
         # Combine covariance loss for both predicted and target embeddings
         cov_loss = off_diag_pred + off_diag_target
+        return torch.clamp(cov_loss, min=epsilon, max=10.0)
 
-        # Optional clamping (for stability)
-        return torch.clamp(cov_loss, min=epsilon, max=5.0)
 
 
 
