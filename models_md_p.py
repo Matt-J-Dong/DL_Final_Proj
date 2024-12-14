@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+from typing import List
 
 def build_mlp(input_dim, hidden_dim, output_dim, dropout=0.0):
     layers = [
