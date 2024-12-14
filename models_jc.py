@@ -165,20 +165,20 @@ class JEPA_Model(nn.Module):
 
     def variance_regularization(self, pred_encs, target_encs, epsilon=1e-4, min_variance=1.0):
         # Ensure consistent 3D shape [B, T, D]
-        if pred_encs.ndim == 2:
-            pred_encs = pred_encs.unsqueeze(0)  # Add batch dimension
-        if target_encs.ndim == 2:
-            target_encs = target_encs.unsqueeze(0)  # Add batch dimension
+        # if pred_encs.ndim == 2:
+        #     pred_encs = pred_encs.unsqueeze(0)  # Add batch dimension
+        # if target_encs.ndim == 2:
+        #     target_encs = target_encs.unsqueeze(0)  # Add batch dimension
 
-        B, T, D = pred_encs.shape
+        # B, T, D = pred_encs.shape
 
-        # Reshape to 2D for computation: [B*T, D]
-        pred_encs = pred_encs.reshape(-1, D)
-        target_encs = target_encs.reshape(-1, D)
+        # # Reshape to 2D for computation: [B*T, D]
+        # pred_encs = pred_encs.reshape(-1, D)
+        # target_encs = target_encs.reshape(-1, D)
 
         # Apply BatchNorm
-        pred_encs = self.batch_norm(pred_encs)
-        target_encs = self.batch_norm(target_encs)
+        # pred_encs = self.batch_norm(pred_encs)
+        # target_encs = self.batch_norm(target_encs)
 
         # Compute variance separately
         pred_std_x = torch.sqrt(pred_encs.var(dim=0) + epsilon)
