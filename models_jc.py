@@ -146,24 +146,36 @@ class JEPA_Model(nn.Module):
 
 
     def covariance_regularization(self, pred_encs, target_encs, epsilon=1e-4):
-        # Combine predicted and target embeddings
-        states = torch.cat([pred_encs, target_encs], dim=0)
-        
-        # Center embeddings
-        if states.ndim == 3:
-            states = states.view(-1, states.size(-1))
-        states = states - states.mean(dim=0)
-        
-        # Compute covariance matrix
-        cov_matrix = torch.matmul(states.t(), states) / (states.size(0) - 1)
-        
-        # Remove diagonal (focus on off-diagonal correlations)
-        off_diagonal = cov_matrix.clone()
-        torch.diagonal(off_diagonal)[:] = 0
-        
-        # Penalize off-diagonal correlations
-        cov_loss = torch.sum(off_diagonal.pow(2)) / (states.size(1) * (states.size(1) - 1) + epsilon)
+        def off_diagonal(matrix):
+            # Helper to zero out diagonal and retain off-diagonal elements
+            return matrix - torch.diag_embed(torch.diagonal(matrix))
+
+        # Reshape to 2D if necessary
+        if pred_encs.ndim == 3:
+            pred_encs = pred_encs.view(-1, pred_encs.size(-1))  # [Batch * Time, Embedding]
+        if target_encs.ndim == 3:
+            target_encs = target_encs.view(-1, target_encs.size(-1))  # [Batch * Time, Embedding]
+
+        # Center predicted embeddings
+        pred_encs = pred_encs - pred_encs.mean(dim=0)
+
+        # Center target embeddings
+        target_encs = target_encs - target_encs.mean(dim=0)
+
+        # Compute covariance matrices
+        cov_pred = torch.matmul(pred_encs.T, pred_encs) / (pred_encs.size(0) - 1)  # Covariance for predictions
+        cov_target = torch.matmul(target_encs.T, target_encs) / (target_encs.size(0) - 1)  # Covariance for targets
+
+        # Compute off-diagonal penalties
+        off_diag_pred = off_diagonal(cov_pred).pow(2).sum() / pred_encs.size(1)  # Normalize by embedding dim
+        off_diag_target = off_diagonal(cov_target).pow(2).sum() / target_encs.size(1)  # Normalize by embedding dim
+
+        # Combine covariance loss for both predicted and target embeddings
+        cov_loss = off_diag_pred + off_diag_target
+
+        # Optional clamping (for stability)
         return torch.clamp(cov_loss, min=epsilon, max=5.0)
+
 
 
 
