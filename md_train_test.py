@@ -64,6 +64,7 @@ class Trainer:
 
         # Save datasets for probing
         self.train_dataset = train_dataset
+        self.val_loader = val_loader
 
         train_loader = DataLoader(train_dataset, batch_size=self.config["batch_size"], shuffle=True)
 
