@@ -59,7 +59,10 @@ class Trainer:
 
         full_dataset = full_loader.dataset
         train_size = int(self.config["split_ratio"] * len(full_dataset))
+        val_size = len(full_dataset) - train_size
+        train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
 
+        # Save datasets for probing
         self.train_dataset = train_dataset
 
         train_loader = DataLoader(train_dataset, batch_size=self.config["batch_size"], shuffle=True)
