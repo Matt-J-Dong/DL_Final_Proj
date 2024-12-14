@@ -151,7 +151,7 @@ def main():
         "learning_rate": 2e-4,
         # 'step_per_epoch': 1000,
         "momentum": 0.996,
-        "split_ratio": 0.9,
+        "split_ratio": 1.0,
         "lambda_energy": 0.5,
         "lambda_var": 1.0,
         "lambda_cov": 0.1,
