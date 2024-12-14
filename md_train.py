@@ -70,15 +70,15 @@ class Trainer:
         # Ensure consistent splits by using the same generator
         generator = torch.Generator().manual_seed(42)
         train_subset, _ = random_split(full_train_dataset, [train_size, val_size], generator=generator)
-        _, val_subset = random_split(full_val_dataset, [train_size, val_size], generator=generator)
+        # _, val_subset = random_split(full_val_dataset, [train_size, val_size], generator=generator)
 
         # Update DataLoaders with subsets
         train_loader = DataLoader(train_subset, batch_size=self.config["batch_size"], shuffle=True)
-        val_loader = DataLoader(val_subset, batch_size=self.config["batch_size"], shuffle=False)
+        # val_loader = DataLoader(val_subset, batch_size=self.config["batch_size"], shuffle=False)
 
         # Store datasets for probing evaluation
         self.train_dataset = train_subset
-        self.val_dataset = val_subset
+        # self.val_dataset = val_subset
 
         return train_loader, val_loader
 
