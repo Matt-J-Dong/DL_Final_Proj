@@ -227,7 +227,9 @@ class JEPA_Model(nn.Module):
 
         # Compute off-diagonal penalties
         off_diag_pred = off_diagonal(cov_pred).pow(2).sum() / pred_encs.size(1)  # Normalize by embedding dim
+        off_diag_pred = torch.clamp(off_diag_pred, max=1e4)
         off_diag_target = off_diagonal(cov_target).pow(2).sum() / target_encs.size(1)  # Normalize by embedding dim
+        off_diag_target = torch.clamp(off_diag_target, max=1e4)
 
         # Combine covariance loss for both predicted and target embeddings
         cov_loss = off_diag_pred + off_diag_target
