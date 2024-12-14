@@ -32,17 +32,17 @@ class SmallCNN(nn.Module):
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
 
-            # Second Convolutional Block
-            nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+            # # Second Convolutional Block
+            # nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=False),
+            # nn.BatchNorm2d(32),
+            # nn.ReLU(inplace=True),
+            # nn.MaxPool2d(kernel_size=2, stride=2),
 
-            # Third Convolutional Block
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+            # # Third Convolutional Block
+            # nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1, bias=False),
+            # nn.BatchNorm2d(64),
+            # nn.ReLU(inplace=True),
+            # nn.MaxPool2d(kernel_size=2, stride=2),
         )
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))  # Global average pooling
         self.fc = nn.Linear(64, output_dim)  # Fully connected layer to output_dim
