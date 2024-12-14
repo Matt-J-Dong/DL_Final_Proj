@@ -7,7 +7,7 @@ from torch.utils.data import random_split, DataLoader
 from dataset import create_wall_dataloader
 from models_jc import JEPA_Model
 import torch.multiprocessing as mp
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR
 import wandb
 
 class Trainer:
@@ -75,11 +75,16 @@ class Trainer:
         train_loader, val_loader = self.load_data()
         model = JEPA_Model(device=self.device, repr_dim=256, action_dim=2, dropout_prob=0).to(self.device)
 
-        optimizer = optim.Adam(model.parameters(), lr=self.config["learning_rate"])
-        scheduler = CosineAnnealingLR(optimizer, T_max=self.config["num_epochs"])
+        optimizer = optim.Adam(model.parameters(), lr=self.config["learning_rate"], weight_decay=1e-4)
+        scheduler = CyclicLR(optimizer,
+                                base_lr=self.config["learning_rate"]/10,
+                                max_lr=self.config["learning_rate"]*0.5,
+                                step_size_up=2 * len(train_loader),
+                                mode='triangular2')
 
         for epoch in range(1, self.config["num_epochs"] + 1):
             print(f"Epoch {epoch}, Learning Rate: {optimizer.param_groups[0]['lr']}")
+            wandb.log({"lr": optimizer.param_groups[0]['lr']})
             epoch_loss = 0.0
             model.train()
 
@@ -126,6 +131,7 @@ def main():
         "batch_size": 512,
         "num_epochs": 20,
         "learning_rate": 2e-4,
+        'step_per_epoch': 1000,
         "momentum": 0.996,
         "split_ratio": 0.9,
         "lambda_energy": 1.0,
