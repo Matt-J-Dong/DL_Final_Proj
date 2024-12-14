@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=1              # runs 1 tasks on each server
 #SBATCH --cpus-per-task=1                # uses 4 compute cores per task
 #SBATCH --gres=gpu:1
-#SBATCH --time=48:00:00
+#SBATCH --time=12:00:00
 #SBATCH --mem=64GB
 #SBATCH --job-name=DeepLearning_model_n
 #SBATCH --output=DeepLearning_model_n.out
