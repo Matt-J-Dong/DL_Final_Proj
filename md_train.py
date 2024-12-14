@@ -1,3 +1,5 @@
+# md_train.py
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -10,13 +12,14 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR
 import wandb
 from dotenv import load_dotenv
 
-# Added imports for probing evaluation
-from evaluator_md import ProbingConfig, ProbingEvaluator
+# Import ProbingConfig and ProbingEvaluator from evaluator_md.py
+from evaluator_md import ProbingConfig, ProbingEvaluator  # Changed import source
 
 load_dotenv()
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")
 os.environ["WANDB_API_KEY"] = WANDB_API_KEY
 wandb.login(key=WANDB_API_KEY)
+
 
 class Trainer:
     def __init__(self, config):
@@ -27,25 +30,51 @@ class Trainer:
     def load_data(self):
         data_path = "/scratch/DL24FA"
 
-        full_loader = create_wall_dataloader(
+        # Create Training DataLoader with probing=False
+        train_loader = create_wall_dataloader(
             data_path=f"{data_path}/train",
-            probing=False,
+            probing=False,  # Training does not require 'locations'
             device=self.device,
             train=True,
             batch_size=self.config["batch_size"],
         )
 
-        full_dataset = full_loader.dataset
-        train_size = int(self.config["split_ratio"] * len(full_dataset))
-        val_size = len(full_dataset) - train_size
-        train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+        # Create Validation DataLoader with probing=True
+        probe_val_normal_ds = create_wall_dataloader(
+            data_path=f"{data_path}/probe_normal/val",
+            probing=True,
+            device=device,
+            train=False,
+        )
 
-        train_loader = DataLoader(train_dataset, batch_size=self.config["batch_size"], shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=self.config["batch_size"], shuffle=False)
+        probe_val_wall_ds = create_wall_dataloader(
+            data_path=f"{data_path}/probe_wall/val",
+            probing=True,
+            device=device,
+            train=False,
+        )
+
+        val_loader = {"normal": probe_val_normal_ds, "wall": probe_val_wall_ds}
+
+        # Split both loaders' datasets consistently
+        full_train_dataset = train_loader.dataset
+        full_val_dataset = val_loader.dataset
+
+        train_size = int(self.config["split_ratio"] * len(full_train_dataset))
+        val_size = len(full_train_dataset) - train_size
+
+        # Ensure consistent splits by using the same generator
+        generator = torch.Generator().manual_seed(42)
+        train_subset, _ = random_split(full_train_dataset, [train_size, val_size], generator=generator)
+        _, val_subset = random_split(full_val_dataset, [train_size, val_size], generator=generator)
+
+        # Update DataLoaders with subsets
+        train_loader = DataLoader(train_subset, batch_size=self.config["batch_size"], shuffle=True)
+        val_loader = DataLoader(val_subset, batch_size=self.config["batch_size"], shuffle=False)
 
         # Store datasets for probing evaluation
-        self.train_dataset = train_dataset
-        self.val_dataset = val_dataset
+        self.train_dataset = train_subset
+        self.val_dataset = val_subset
 
         return train_loader, val_loader
 
@@ -85,17 +114,16 @@ class Trainer:
         print(f"Validation Loss: {avg_val_loss:.4f}, Variance: {avg_var:.4f}, Covariance: {avg_cov:.4f}")
 
         # Begin Probing Evaluation
-        # Get probe_lr from config or wandb
         probe_lr = self.config.get("probe_lr", 0.0002)
-        
-        # Assuming self.train_dataset and self.val_dataset are available
+
+        # Prepare datasets for ProbingEvaluator
         probe_train_ds = self.train_dataset
-        probe_val_ds = self.val_dataset
+        probe_val_ds = self.val_dataset  # Validation dataset with probing=True
 
         # Define ProbingConfig
         probing_config = ProbingConfig(
             probe_targets="locations",
-            lr=probe_lr,  # default, overridden below
+            lr=probe_lr,
             epochs=20,
             schedule=None,
             sample_timesteps=30,
@@ -107,13 +135,10 @@ class Trainer:
             device=self.device,
             model=model,
             probe_train_ds=probe_train_ds,
-            probe_val_ds=probe_val_ds,
+            probe_val_ds=probe_val_ds,  # Pass the validation dataset with probing=True
             config=probing_config,
             quick_debug=False
         )
-
-        # Override probe_lr from config if necessary
-        evaluator.config.lr = probe_lr
 
         # Train prober
         prober = evaluator.train_pred_prober()
@@ -133,8 +158,8 @@ class Trainer:
             "probing_lr": current_probe_lr
         })
 
-        # Write probing results to file
-        with open("losses_testing.txt", "a") as f:
+        # Write probing results to losses_testing.txt
+        with open("losses_testing.txt", "a") as f:  # Changed filename
             f.write(f"Validation: val_loss_normal={val_loss_normal}, val_loss_wall={val_loss_wall}, probing_lr={current_probe_lr}\n")
 
         return avg_val_loss
