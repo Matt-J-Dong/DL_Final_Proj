@@ -20,6 +20,11 @@ WANDB_API_KEY = os.getenv("WANDB_API_KEY")
 os.environ["WANDB_API_KEY"] = WANDB_API_KEY
 wandb.login(key=WANDB_API_KEY)
 
+if torch.cuda.is_available():
+        device = torch.device('cuda')
+    else:
+        device = torch.device('cpu')
+
 class Trainer:
     def __init__(self, config):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -233,7 +238,7 @@ def main():
     else:
         device = torch.device('cpu')
     print(f"Using device: {device}")
-    
+
     config = {
         "batch_size": 1024,
         "num_epochs": 10,
