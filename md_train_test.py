@@ -113,7 +113,7 @@ class Trainer:
     def save_model(self, model, epoch):
         save_path = self.config.get("save_path", "checkpoints")
         os.makedirs(save_path, exist_ok=True)
-        save_file = os.path.join(save_path, f"jepa_model_epoch_{epoch}.pth")
+        save_file = os.path.join(save_path, f"jepa_model_testing_epoch_{epoch}.pth")
         torch.save(model.state_dict(), save_file)
         print(f"Model saved to {save_file}")
 
@@ -251,7 +251,7 @@ class Trainer:
                     print(f"Epoch [{epoch}/{self.config['num_epochs']}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}")
                     self.save_model(model, f"{epoch}_batch_{batch_idx}")
                     # Perform validation
-                    val_loss = self.validate_model(model, epoch, epoch_loss / (batch_idx + 1), optimizer)
+                    #val_loss = self.validate_model(model, epoch, epoch_loss / (batch_idx + 1), optimizer)
                     wandb.log({"val_loss": val_loss})
 
             avg_epoch_loss = epoch_loss / len(train_loader)
@@ -262,8 +262,8 @@ class Trainer:
 
             if epoch % self.config["save_every"] == 0:
                 self.save_model(model, epoch)
-                val_loss = self.validate_model(model, epoch, avg_epoch_loss, optimizer)
-                wandb.log({"val_loss": val_loss})
+                #val_loss = self.validate_model(model, epoch, avg_epoch_loss, optimizer)
+                #wandb.log({"val_loss": val_loss})
 
         print("Training completed.")
         self.save_model(model, "final")
@@ -271,7 +271,7 @@ class Trainer:
 def main():
     config = {
         "batch_size": 1024,
-        "num_epochs": 10,
+        "num_epochs": 2,
         "learning_rate": 5e-3,
         'step_per_epoch': 1000,
         "momentum": 0.996,

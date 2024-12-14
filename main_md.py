@@ -1,15 +1,16 @@
 from dataset import create_wall_dataloader
 from evaluator import ProbingEvaluator
 import torch
-from models_md_3 import JEPA_Model
+from models_jc import JEPA_Model
 import glob
-import os
-from collections import OrderedDict
+
 
 def get_device():
+    """Check for GPU availability."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
     return device
+
 
 def load_data(device):
     data_path = "/scratch/DL24FA"
@@ -39,23 +40,25 @@ def load_data(device):
 
     return probe_train_ds, probe_val_ds
 
-def load_model(checkpoint_path="./checkpoints"):
-    if not os.path.exists(checkpoint_path):
-        raise FileNotFoundError("No checkpoint directory found.")
-    checkpoint_files = glob.glob(os.path.join(checkpoint_path, "jepa_model_3_epoch_*_batch_*.pth"))
-    if len(checkpoint_files) == 0:
-        raise FileNotFoundError("No checkpoint found in the directory.")
-    checkpoint_files.sort(key=os.path.getmtime)
-    latest_checkpoint = checkpoint_files[-1]
-    print(f"Loading model from {latest_checkpoint}")
-    checkpoint = torch.load(latest_checkpoint, map_location=device)
-    model = JEPA_Model(device="cpu", repr_dim=256, action_dim=2)
+
+def load_model():
+    """Load or initialize the model."""
+    # TODO: Replace MockModel with your trained model
+    model = JEPA_Model()
+    # Load the saved model weights
+    #state_dict = torch.load('./checkpoints/jepa_model_epoch_final.pth', map_location=torch.device('cpu'))
+    state_dict = torch.load('./checkpoints/jepa_model_epoch_10.pth', map_location=torch.device('cpu'))
+    
+    # Handle potential 'module.' prefix in state_dict keys
+    from collections import OrderedDict
     new_state_dict = OrderedDict()
-    for k, v in checkpoint['model_state_dict'].items():
-        name = k[7:] if k.startswith('module.') else k
+    for k, v in state_dict.items():
+        name = k[7:] if k.startswith('module.') else k  # remove 'module.' prefix if present
         new_state_dict[name] = v
+
     model.load_state_dict(new_state_dict)
     return model
+
 
 def evaluate_model(device, model, probe_train_ds, probe_val_ds):
     evaluator = ProbingEvaluator(
@@ -67,12 +70,15 @@ def evaluate_model(device, model, probe_train_ds, probe_val_ds):
     )
 
     prober = evaluator.train_pred_prober()
+
     avg_losses = evaluator.evaluate_all(prober=prober)
+
     for probe_attr, loss in avg_losses.items():
         print(f"{probe_attr} loss: {loss}")
+
 
 if __name__ == "__main__":
     device = get_device()
     probe_train_ds, probe_val_ds = load_data(device)
-    model = load_model("./checkpoints")
+    model = load_model()
     evaluate_model(device, model, probe_train_ds, probe_val_ds)
