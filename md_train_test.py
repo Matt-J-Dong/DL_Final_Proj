@@ -19,7 +19,7 @@ os.environ["WANDB_API_KEY"] = WANDB_API_KEY
 wandb.login(key=WANDB_API_KEY)
 
 if torch.cuda.is_available():
-        device = torch.device('cuda')
+    device = torch.device('cuda')
 else:
     device = torch.device('cpu')
 
