@@ -41,6 +41,13 @@ class Trainer:
             batch_size=self.config["batch_size"],  # Ensure batch_size is specified
         )
 
+        probe_train_ds = create_wall_dataloader(
+            data_path=f"{data_path}/probe_normal/train",
+            probing=True,
+            device=device,
+            train=True,
+        )
+
         # Create Validation DataLoaders with probing=True and specified batch_size
         probe_val_normal_ds = create_wall_dataloader(
             data_path=f"{data_path}/probe_normal/val",
