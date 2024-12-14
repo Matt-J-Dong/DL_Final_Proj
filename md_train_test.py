@@ -252,7 +252,7 @@ class Trainer:
                     self.save_model(model, f"{epoch}_batch_{batch_idx}")
                     # Perform validation
                     #val_loss = self.validate_model(model, epoch, epoch_loss / (batch_idx + 1), optimizer)
-                    wandb.log({"val_loss": val_loss})
+                    #wandb.log({"val_loss": val_loss})
 
             avg_epoch_loss = epoch_loss / len(train_loader)
             print(f"Epoch [{epoch}/{self.config['num_epochs']}] Average Loss: {avg_epoch_loss:.4f}")
