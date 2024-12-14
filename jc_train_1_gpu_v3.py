@@ -7,8 +7,9 @@ from torch.utils.data import random_split, DataLoader
 from dataset import create_wall_dataloader
 from models_jc import JEPA_Model
 import torch.multiprocessing as mp
-from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR, LambdaLR
 import wandb
+import math
 
 class Trainer:
     def __init__(self, config):
@@ -76,12 +77,11 @@ class Trainer:
         model = JEPA_Model(device=self.device, repr_dim=256, action_dim=2, dropout_prob=0).to(self.device)
 
         optimizer = optim.Adam(model.parameters(), lr=self.config["learning_rate"], weight_decay=1e-4)
-        scheduler = CyclicLR(optimizer,
-                                base_lr=self.config["learning_rate"]/10,
-                                max_lr=self.config["learning_rate"]*0.5,
-                                step_size_up=2 * len(train_loader),
-                                mode='triangular2')
-        
+        scheduler = get_cosine_schedule_with_warmup(optimizer, 
+                                                    num_warmup_steps=10, 
+                                                    num_training_steps=self.config["num_epochs"] * len(train_loader), 
+                                                    initial_lr=self.config["learning_rate"], 
+                                                    final_lr=1e-8)
         # optimizer = torch.optim.SGD(model.parameters(), lr=self.config['learning_rate'], momentum=self.config['momentum'], weight_decay=1e-4)
         # scheduler = StepLR(optimizer, step_size=50, gamma=0.4)  # Reduce LR by 50% every 5 epochs
 
@@ -129,6 +129,19 @@ class Trainer:
 
         print("Training completed.")
         self.save_model(model, "final")
+
+
+
+# Define the learning rate scheduler with warmup and cosine decay
+def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, num_cycles=0.5, last_epoch=-1, initial_lr=1e-3, final_lr=1e-5):
+    def lr_lambda(current_step):
+        if current_step < num_warmup_steps:
+            lr = initial_lr * float(current_step) / float(max(1, num_warmup_steps))
+        else:
+            progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
+            lr = final_lr + 5 * (initial_lr - final_lr) * (1.0 + math.cos(math.pi * progress))
+        return lr / initial_lr  # Return multiplicative factor
+    return LambdaLR(optimizer, lr_lambda, last_epoch)
 
 
 def main():
