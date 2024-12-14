@@ -207,7 +207,7 @@ class JEPA_Model(nn.Module):
 
         # Combine covariance loss for both predicted and target embeddings
         cov_loss = off_diag_pred + off_diag_target
-        return torch.clamp(cov_loss, min=epsilon, max=10.0)
+        return cov_loss
 
 
 
