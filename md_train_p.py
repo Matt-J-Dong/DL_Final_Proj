@@ -42,6 +42,7 @@ def save_model(model, optimizer, epoch, batch_idx, learning_rate, dropout, lambd
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
+    # Include probe_lr in filename
     if batch_idx == -1:
         save_file = os.path.join(
             save_path,
@@ -69,7 +70,7 @@ def load_latest_checkpoint(model, optimizer, learning_rate, dropout, lambda_cov,
     if not os.path.exists(checkpoint_dir):
         return 1, 0
 
-    pattern = f"jepa_model_p_epoch_*_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
+    pattern = f"jepa_model_c_epoch_*_lr_{learning_rate}_do_{dropout}_cov_{lambda_cov}_probe_{probe_lr}.pth"
     checkpoint_files = glob.glob(os.path.join(checkpoint_dir, pattern))
     if len(checkpoint_files) == 0:
         return 1, 0
@@ -143,17 +144,6 @@ def train_model(
             states = batch.states.to(device)
             actions = batch.actions.to(device)
 
-            # Flatten states to [B, 8450]
-            B,T,C,H,W = states.shape
-            # Flatten C,H,W and T (we need to confirm how to get exactly 8450 features):
-            # Let's assume T=10,C=2,H=65,W=65 would be 2*65*65=8450, single time step. If multiple timesteps, adjust.
-            # The user states dimension is important. We'll assume T=... and we pick T=0 or T=some dimension.
-            # We'll just pick init_state = states[:,0]: [B,C,H,W]. Flatten that:
-            init_state = states[:,0].view(B,-1) # should be [B,2*H*W]. Must ensure that 2*H*W=8450.
-            assert init_state.size(1) == 8450, f"Expected flattened init_state to have 8450 features, got {init_state.size(1)}"
-
-            # Similarly actions dimension handling:
-            # actions: [B,T-1,action_dim=2]
             loss, pred_encs = model.train_step(
                 states=states, 
                 actions=actions,
@@ -171,7 +161,9 @@ def train_model(
             last_pred_encs = pred_encs
 
             if batch_idx % 50 == 0:
-                print(f"Epoch [{epoch}/{num_epochs}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}")
+                print(
+                    f"Epoch [{epoch}/{num_epochs}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}"
+                )
                 save_model(model, optimizer, epoch, batch_idx, learning_rate, dropout, lambda_cov, probe_lr)
 
         avg_epoch_loss = epoch_loss / len(train_loader)
@@ -189,14 +181,13 @@ def train_model(
 
         probing_config = ProbingConfig(
             probe_targets="locations",
-            lr=0.0002,
+            lr=0.0002,  # default, overridden below
             epochs=20,
             schedule=None,
             sample_timesteps=30,
             prober_arch="256",
         )
 
-        from evaluator_md import ProbingEvaluator
         evaluator = ProbingEvaluator(
             device=device,
             model=model,
@@ -206,6 +197,7 @@ def train_model(
             quick_debug=False
         )
 
+        # Override probe_lr from wandb.config
         evaluator.config.lr = probe_lr
 
         prober = evaluator.train_pred_prober()
@@ -240,7 +232,7 @@ def train_model(
         else:
             if val_loss_normal > best_val_loss_normal:
                 worse_count += 1
-                if worse_count == 2:
+                if worse_count == patience:
                     print("Early stopping triggered: Validation loss increased 4 epochs in a row.")
                     break
             else:
@@ -257,6 +249,17 @@ def train_model(
 
 def main():
     wandb.init(project="my_jepa_project_sweep_model_p")  # Start W&B run under a sweep agent
+    sweep_config = {
+    "method": "grid",
+    "parameters": {
+        "momentum": {"values": [0.9, 0.99]},
+        "batch_size": {"values": [128,512]},
+        "probe_lr": {"values": [0.0005, 0.002, 0.008]},
+        "lambda_cov": {"values": [0.4, 0.7]},
+        "learning_rate": {"values": [5e-5, 1e-4, 5e-4]},
+        "dropout": {"values": [0.0]}
+    }
+    }
     device = get_device()
 
     # Hyperparameters from wandb.config (sweep)
