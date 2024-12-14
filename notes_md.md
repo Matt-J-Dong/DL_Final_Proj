@@ -10,6 +10,9 @@ Version f builds on it with new hyperparameters.
 c12m85-a100-1
 srun --account=csci_ga_2572-2024fa --partition=c12m85-a100-1 --gres=gpu:a100:1 --cpus-per-task=4 --time=08:00:00 --pty /bin/bash\
 
+Version v2 is an LSTM encoder.
+Version v3 is a 1/2 size version of v2
+
 
 again: normal loss: 259.8260803222656
 wall loss: 187.7458038330078
