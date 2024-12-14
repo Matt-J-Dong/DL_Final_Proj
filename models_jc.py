@@ -126,7 +126,7 @@ class JEPA_Model(nn.Module):
         self.target_encoder = Encoder(output_dim=repr_dim).to(device)
 
         # BatchNorm for embeddings
-        self.batch_norm = nn.BatchNorm1d(repr_dim)
+        self.batch_norm = nn.BatchNorm1d(repr_dim).to(device)
 
         # Load encoder weights into target encoder
         self.target_encoder.load_state_dict(self.encoder.state_dict())
