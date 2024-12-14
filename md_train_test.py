@@ -32,7 +32,7 @@ class Trainer:
     def load_data(self):
         data_path = "/scratch/DL24FA"
 
-        # Create Training DataLoader
+        # Create Training DataLoader with probing=False
         full_loader = create_wall_dataloader(
             data_path=f"{data_path}/train",
             probing=False,
@@ -41,11 +41,13 @@ class Trainer:
             batch_size=self.config["batch_size"],  # Ensure batch_size is specified
         )
 
+        # Create Probing Training DataLoader with probing=True and specified batch_size
         probe_train_ds = create_wall_dataloader(
             data_path=f"{data_path}/probe_normal/train",
             probing=True,
-            device=device,
+            device=self.device,
             train=True,
+            batch_size=self.config["batch_size"],  # **Added batch_size**
         )
 
         # Create Validation DataLoaders with probing=True and specified batch_size
@@ -74,6 +76,7 @@ class Trainer:
 
         # Save datasets for probing
         self.train_dataset = train_dataset
+        self.probe_train_dataset = probe_train_ds.dataset  # **Store probe_train_dataset**
         self.val_loader = val_loader
 
         train_loader = DataLoader(train_dataset, batch_size=self.config["batch_size"], shuffle=True)
@@ -95,6 +98,9 @@ class Trainer:
 
         # Inspect Training DataLoader
         inspect_dataloader(train_loader, "Training")
+
+        # Inspect Probing Training DataLoader
+        inspect_dataloader(probe_train_ds, "Probing Training")
 
         # Inspect Validation DataLoaders
         inspect_dataloader(probe_val_normal_ds, "Validation Normal")
@@ -127,12 +133,12 @@ class Trainer:
             prober_arch="256",
         )
 
-        # Initialize ProbingEvaluator with training and validation datasets
+        # Initialize ProbingEvaluator with probing training and validation datasets
         evaluator = ProbingEvaluator(
             device=self.device,
             model=model,
-            probe_train_ds=self.train_dataset,  # Using the training dataset for probing
-            probe_val_ds=self.val_loader,      # Using the validation datasets for probing
+            probe_train_ds=self.probe_train_dataset,  # **Use probe_train_dataset**
+            probe_val_ds=self.val_loader,              # Using the validation datasets for probing
             config=probing_config,
             quick_debug=False
         )
@@ -147,14 +153,14 @@ class Trainer:
         except IndexError as e:
             print(f"\nIndexError encountered during probing training: {e}")
             print("Inspecting 'locations' tensor in training dataset:")
-            # Inspect a sample from the training dataset
-            if hasattr(self.train_dataset, '__getitem__'):
-                sample = self.train_dataset[0]
+            # Inspect a sample from the probing training dataset
+            if hasattr(self.probe_train_dataset, '__getitem__'):
+                sample = self.probe_train_dataset[0]
                 locations = getattr(sample, "locations", None)
                 if locations is not None:
-                    print(f"Training sample 'locations' shape: {locations.shape}")
+                    print(f"Probing Training sample 'locations' shape: {locations.shape}")
                 else:
-                    print("Training sample does not have 'locations' attribute.")
+                    print("Probing Training sample does not have 'locations' attribute.")
             print("Inspecting 'locations' tensors in validation datasets:")
             for key, val_ds in self.val_loader.items():
                 if hasattr(val_ds, '__iter__'):
