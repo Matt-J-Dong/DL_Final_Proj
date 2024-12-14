@@ -43,10 +43,11 @@ def load_data(device):
 
 def load_model():
     """Load or initialize the model."""
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # TODO: Replace MockModel with your trained model
     model = JEPA_Model()
     # Load the saved model weights
-    state_dict = torch.load('./checkpoints/jepa_model_testing_epoch_final.pth', map_location=torch.device('cpu'))
+    state_dict = torch.load('./checkpoints/jepa_model_testing_epoch_final.pth', map_location=torch.device(device))
     #state_dict = torch.load('./checkpoints/jepa_model_epoch_10.pth', map_location=torch.device('cpu'))
     
     # Handle potential 'module.' prefix in state_dict keys
