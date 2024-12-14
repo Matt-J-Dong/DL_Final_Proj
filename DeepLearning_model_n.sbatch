@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes=1                        # requests 1 compute server
 #SBATCH --ntasks-per-node=1              # runs 1 tasks on each server
-#SBATCH --cpus-per-task=8                # uses 4 compute cores per task
+#SBATCH --cpus-per-task=1                # uses 4 compute cores per task
 #SBATCH --gres=gpu:1
 #SBATCH --time=48:00:00
 #SBATCH --mem=64GB
