@@ -31,12 +31,10 @@ class Trainer:
         full_dataset = full_loader.dataset
         train_size = int(self.config["split_ratio"] * len(full_dataset))
         val_size = len(full_dataset) - train_size
-        train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
 
-        train_loader = DataLoader(train_dataset, batch_size=self.config["batch_size"], shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=self.config["batch_size"], shuffle=False)
+        train_loader = DataLoader(full_dataset, batch_size=self.config["batch_size"], shuffle=True)
 
-        return train_loader, val_loader
+        return train_loader
 
     def save_model(self, model, epoch):
         save_path = self.config.get("save_path", "checkpoints")
@@ -73,7 +71,7 @@ class Trainer:
 
 
     def train(self):
-        train_loader, val_loader = self.load_data()
+        train_loader = self.load_data()
         model = JEPA_Model(device=self.device, repr_dim=256, action_dim=2, dropout_prob=0).to(self.device)
 
         optimizer = optim.Adam(model.parameters(), lr=self.config["learning_rate"], weight_decay=1e-4)
@@ -115,8 +113,8 @@ class Trainer:
                 if batch_idx % 100 == 0:
                     print(f"Epoch [{epoch}/{self.config['num_epochs']}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}")
                     self.save_model(model, f"{epoch}_batch_{batch_idx}")
-                    val_loss = self.validate_model(model, val_loader)
-                    wandb.log({"val_loss": val_loss})
+                    # val_loss = self.validate_model(model, val_loader)
+                    # wandb.log({"val_loss": val_loss})
 
             avg_epoch_loss = epoch_loss / len(train_loader)
             print(f"Epoch [{epoch}/{self.config['num_epochs']}] Average Loss: {avg_epoch_loss:.4f}")
@@ -124,8 +122,8 @@ class Trainer:
 
             if epoch % self.config["save_every"] == 0:
                 self.save_model(model, epoch)
-                val_loss = self.validate_model(model, val_loader)
-                wandb.log({"val_loss": val_loss})
+                # val_loss = self.validate_model(model, val_loader)
+                # wandb.log({"val_loss": val_loss})
 
         print("Training completed.")
         self.save_model(model, "final")
