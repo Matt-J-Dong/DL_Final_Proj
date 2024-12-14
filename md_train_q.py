@@ -298,7 +298,7 @@ def main():
         batch_size=batch_size
     )
 
-    model = JEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
+    model = RecurrentJEPA_Model(device=device, repr_dim=256, action_dim=2, dropout=dropout)
     model.to(device)
 
     trained_model = train_model(
