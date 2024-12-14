@@ -272,7 +272,7 @@ class Trainer:
 
 def main():
     config = {
-        "batch_size": 1024,
+        "batch_size": 512,
         "num_epochs": 4,
         "learning_rate": 5e-5,
         'step_per_epoch': 1000,
