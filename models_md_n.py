@@ -123,11 +123,9 @@ class JEPA_Model(nn.Module):
         """
         B, T, C, H, W = states.shape
 
-        # Add noise if requested
         if add_noise:
             states = states + 0.01 * torch.randn_like(states)
 
-        # Random horizontal flip with 50% chance for data augmentation
         if torch.rand(1).item() < 0.5:
             states = torch.flip(states, dims=[3])
 
@@ -143,11 +141,7 @@ class JEPA_Model(nn.Module):
 
         # Compute energy loss
         energy = self.compute_energy(pred_encs, target_encs, distance_function)  # (B)
-
-        # Compute energy-based regularization
         energy_reg = self.compute_energy_regularization(energy, target_average=target_average)
-
-        # Total loss with regularizations
         lambda_var = 0.1
         loss = energy.mean() + energy_reg + lambda_var * self.variance_regularization(pred_encs) + lambda_cov * self.covariance_regularization(pred_encs)
 
