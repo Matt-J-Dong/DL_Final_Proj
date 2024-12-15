@@ -43,8 +43,8 @@ class Trainer:
             data_path=f"{data_path}/train",
             probing=False,
             device=self.device,
+            batch_size=model_size,
             train=True,
-            #No batch_size argument
         )
 
         # Create Probing Training DataLoader with probing=True and specified batch_size
@@ -52,8 +52,8 @@ class Trainer:
             data_path=f"{data_path}/probe_normal/train",
             probing=True,
             device=self.device,
+            batch_size=model_size,
             train=True,
-            #No batch_size argument
         )
 
         # Create Validation DataLoaders with probing=True and specified batch_size
@@ -61,16 +61,16 @@ class Trainer:
             data_path=f"{data_path}/probe_normal/val",
             probing=True,
             device=self.device,
+            batch_size=model_size,
             train=False,
-            #No batch_size argument
         )
 
         probe_val_wall_ds = create_wall_dataloader(
             data_path=f"{data_path}/probe_wall/val",
             probing=True,
             device=self.device,
+            batch_size=model_size,
             train=False,
-            #No batch_size argument
         )
 
         val_loader = {"normal": probe_val_normal_ds, "wall": probe_val_wall_ds}
