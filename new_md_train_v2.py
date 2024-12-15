@@ -1,13 +1,14 @@
-#byol_train_new_v2.py
+# byol_train_new_v2.py
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchvision.models import resnet18
-from torchvision.transforms import Compose, RandomResizedCrop, RandomHorizontalFlip, ColorJitter, GaussianBlur, ToTensor, Normalize
+from torchvision.transforms import Compose, RandomResizedCrop, RandomHorizontalFlip, GaussianBlur, Normalize
 from torch.utils.data import DataLoader, random_split
 from tqdm.auto import tqdm
 import os
+import torchvision.transforms.functional as F
 
 # Replace these imports with your actual modules
 from dataset_md import create_wall_dataloader  # Custom data loader
@@ -27,6 +28,8 @@ class BYOL(nn.Module):
         super(BYOL, self).__init__()
         # Online network components
         self.online_encoder = base_encoder(pretrained=False)
+        # Modify the first convolution layer to accept 2 channels instead of 3
+        self.online_encoder.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.online_encoder.fc = nn.Identity()  # Remove the classification head
         
         self.online_projector = nn.Sequential(
@@ -45,6 +48,7 @@ class BYOL(nn.Module):
         
         # Target network components
         self.target_encoder = base_encoder(pretrained=False)
+        self.target_encoder.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.target_encoder.fc = nn.Identity()  # Remove the classification head
         
         self.target_projector = nn.Sequential(
@@ -126,33 +130,51 @@ def update_target_network(online_net, target_net, momentum):
 
 # Data augmentation for BYOL
 class BYOLAugmentations:
-    def __init__(self, image_size=32):
+    def __init__(self, image_size=36):
         """
         BYOL augmentations comprising two different augmented views of the same image.
         
         Args:
             image_size (int): Desired image size after cropping.
         """
-        self.augment = Compose([
-            RandomResizedCrop(image_size, scale=(0.2, 1.0)),
-            RandomHorizontalFlip(),
-            ColorJitter(0.4, 0.4, 0.4, 0.1),
-            GaussianBlur(kernel_size=3),
-            ToTensor(),
-            Normalize((0.5,), (0.5,)),
-        ])
-    
+        self.image_size = image_size
+
     def __call__(self, x):
         """
         Apply augmentations to the input image.
         
         Args:
-            x (PIL Image or Tensor): Input image.
+            x (Tensor): Input tensor of shape [N, C, H, W].
         
         Returns:
             x_aug (Tensor): Augmented image tensor.
         """
-        return self.augment(x)
+        # x is a batch tensor: [N, C, H, W]
+        # Apply augmentation per image
+        augmented = []
+        for img in x:
+            # Apply RandomResizedCrop
+            i, j, h, w = RandomResizedCrop.get_params(img, scale=(0.2, 1.0), ratio=(3./4., 4./3.))
+            img = F.resized_crop(img, i, j, h, w, self.image_size, interpolation=F.InterpolationMode.BILINEAR)
+            # Apply RandomHorizontalFlip
+            if torch.rand(1) < 0.5:
+                img = F.hflip(img)
+            # Apply GaussianBlur
+            img = F.gaussian_blur(img, kernel_size=3, sigma=(0.1, 2.0))
+            # Normalize
+            if img.shape[0] == 2:
+                mean = (0.5, 0.5)
+                std = (0.5, 0.5)
+            elif img.shape[0] == 1:
+                mean = (0.5,)
+                std = (0.5,)
+            else:
+                mean = (0.5, 0.5, 0.5)
+                std = (0.5, 0.5, 0.5)
+            img = F.normalize(img, mean=mean, std=std)
+            augmented.append(img)
+        augmented = torch.stack(augmented).to(x.device)
+        return augmented
 
 # Trainer class
 class Trainer:
@@ -185,6 +207,9 @@ class Trainer:
         
         # Scheduler (optional)
         self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=self.config['epochs'])
+        
+        # Initialize augmentations
+        self.augmentations = self.config['augmentations']
         
     def load_data(self):
         """
@@ -375,9 +400,6 @@ class Trainer:
         online_net = self.online_network
         target_net = self.target_network
 
-        # Initialize data augmentations
-        augmentations = self.config['augmentations']
-
         # Training loop
         for epoch in range(1, self.config["epochs"] + 1):
             online_net.train()
@@ -394,8 +416,8 @@ class Trainer:
                 x = x.to(self.device)
                 
                 # Apply two separate augmentations
-                x1 = augmentations(x)
-                x2 = augmentations(x)
+                x1 = self.augmentations(x)
+                x2 = self.augmentations(x)
                 
                 # Forward pass through online network
                 z1_online, p1 = online_net.forward_online(x1)
@@ -461,6 +483,17 @@ class Trainer:
 
 # Main function
 def main():
+    import wandb
+    from dotenv import load_dotenv
+    
+    load_dotenv()
+    WANDB_API_KEY = os.getenv("WANDB_API_KEY")
+    if WANDB_API_KEY:
+        os.environ["WANDB_API_KEY"] = WANDB_API_KEY
+        wandb.login(key=WANDB_API_KEY)
+    else:
+        print("WANDB_API_KEY not found. Proceeding without W&B logging.")
+    
     # Configuration dictionary
     config = {
         "batch_size": 128,
@@ -478,9 +511,14 @@ def main():
     }
 
     # Initialize data augmentations
-    config['augmentations'] = BYOLAugmentations(image_size=32)  # Adjust image_size based on your dataset
+    config['augmentations'] = BYOLAugmentations(image_size=36)  # Adjust image_size based on your dataset
 
     # Initialize and start training
+    wandb.init(
+        project=f"BYOL_Project_{config['model_version']}",
+        config=config
+    )
+
     trainer = Trainer(config)
     trainer.train()
 
