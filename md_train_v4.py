@@ -19,11 +19,6 @@ model_version = "v4"
 mp.set_start_method('spawn', force=True)  # Set start method to 'spawn'
 
 def main():
-    
-    
-
-    
-
     load_dotenv()
     WANDB_API_KEY = os.getenv("WANDB_API_KEY")
     os.environ["WANDB_API_KEY"] = WANDB_API_KEY
@@ -98,7 +93,7 @@ def main():
                 train_dataset,
                 batch_size=self.config["batch_size"],
                 shuffle=True,
-                num_workers=16,          # Set to 16 CPU workers
+                num_workers=2,          # Set to 16 CPU workers
                 pin_memory=False         # Disable pin_memory for CPU training
             )
 

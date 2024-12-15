@@ -206,7 +206,7 @@ class Trainer:
 
     def train(self):
         train_loader, val_loader = self.load_data()
-        model = JEPA_Model(device=self.device, repr_dim=256, action_dim=2, dropout_prob=self.config.get("dropout_prob", 0)).to(self.device)
+        model = JEPA_Model(device=self.device, repr_dim=128, action_dim=2, dropout_prob=self.config.get("dropout_prob", 0)).to(self.device)
 
         optimizer = optim.Adam(model.parameters(), lr=self.config["learning_rate"], weight_decay=1e-4)
         scheduler = CyclicLR(
