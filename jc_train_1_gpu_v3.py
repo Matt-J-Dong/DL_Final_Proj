@@ -114,6 +114,7 @@ class Trainer:
                     print(f"Epoch [{epoch}/{self.config['num_epochs']}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}")
                     self.save_model(model, f"{epoch}_batch_{batch_idx}")
                     self.validate_model(model, val_train_ds, val_val_ds)
+                    model.train()
                     # wandb.log({"val_loss": val_loss})
 
             avg_epoch_loss = epoch_loss / len(train_loader)
@@ -123,6 +124,7 @@ class Trainer:
             if epoch % self.config["save_every"] == 0:
                 self.save_model(model, epoch)
                 self.validate_model(model, val_train_ds, val_val_ds)
+                model.train()
                 # wandb.log({"val_loss": val_loss})
 
         print("Training completed.")
