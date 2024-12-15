@@ -15,6 +15,20 @@ import numpy as np
 from dataset_md import create_wall_dataloader  # Custom data loader
 from evaluator_md import ProbingEvaluator, ProbingConfig  # Custom evaluator
 
+model_version = "v2"
+model_size = 64
+path_data = "./data/DL24FA"
+
+load_dotenv()
+WANDB_API_KEY = os.getenv("WANDB_API_KEY")
+os.environ["WANDB_API_KEY"] = WANDB_API_KEY
+wandb.login(key=WANDB_API_KEY)
+
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+else:
+    device = torch.device('cpu')
+
 # Define BYOL components: Online Network and Target Network
 class BYOL(nn.Module):
     def __init__(self, base_encoder=resnet18, projection_dim=128, hidden_dim=4096):
@@ -239,7 +253,7 @@ class Trainer:
             train_loader (DataLoader): DataLoader for training.
             val_loader (dict): Dictionary of DataLoaders for validation.
         """
-        data_path = "/scratch/DL24FA"
+        data_path = path_data
 
         # Create Training DataLoader with probing=False
         full_loader = create_wall_dataloader(
