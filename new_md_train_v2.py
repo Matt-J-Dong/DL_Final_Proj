@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchvision.models import resnet18
-from torchvision.transforms import Compose, RandomResizedCrop, RandomHorizontalFlip, GaussianBlur, Normalize
+from torchvision.transforms import Compose, RandomResizedCrop, RandomHorizontalFlip, GaussianBlur, Normalize, Resize
 from torch.utils.data import DataLoader, random_split
 from tqdm.auto import tqdm
 import os
@@ -150,12 +150,12 @@ def update_target_network(online_net, target_net, momentum):
 
 # Data augmentation for BYOL
 class BYOLAugmentations:
-    def __init__(self, image_size=36):
+    def __init__(self, image_size=(36, 36)):
         """
         BYOL augmentations comprising two different augmented views of the same image.
         
         Args:
-            image_size (int): Desired image size after cropping.
+            image_size (tuple): Desired image size after cropping (height, width).
         """
         self.image_size = image_size
 
@@ -176,8 +176,8 @@ class BYOLAugmentations:
         # Apply augmentation per image
         augmented = []
         for idx, img in enumerate(x):
-            #print(f"\n--- Augmenting image {idx} ---")
-            #print(f"Original image shape: {img.shape}")
+            print(f"\n--- Augmenting image {idx} ---")
+            print(f"Original image shape: {img.shape}")
             
             # Check if img has 3 dimensions [C, H, W]
             if img.dim() != 3:
@@ -192,7 +192,7 @@ class BYOLAugmentations:
             try:
                 i, j, h, w = RandomResizedCrop.get_params(img, scale=(0.2, 1.0), ratio=(3./4., 4./3.))
                 img = F.resized_crop(img, i, j, h, w, self.image_size, interpolation=F.InterpolationMode.BILINEAR)
-                #print(f"After RandomResizedCrop: {img.shape}")
+                print(f"After RandomResizedCrop: {img.shape}")
             except Exception as e:
                 print(f"Error in RandomResizedCrop for image {idx}: {e}")
                 raise e
@@ -200,11 +200,15 @@ class BYOLAugmentations:
             # Apply RandomHorizontalFlip
             if torch.rand(1).item() < 0.5:
                 img = F.hflip(img)
-                #print("Applied RandomHorizontalFlip")
+                print("Applied RandomHorizontalFlip")
 
             # Apply GaussianBlur
-            img = F.gaussian_blur(img, kernel_size=3, sigma=(0.1, 2.0))
-            #print(f"After GaussianBlur: {img.shape}")
+            try:
+                img = F.gaussian_blur(img, kernel_size=3, sigma=(0.1, 2.0))
+                print(f"After GaussianBlur: {img.shape}")
+            except Exception as e:
+                print(f"Error in GaussianBlur for image {idx}: {e}")
+                raise e
 
             # Normalize
             channels = img.shape[0]
@@ -221,7 +225,7 @@ class BYOLAugmentations:
             print(f"Normalization mean: {mean}, std: {std}")
             try:
                 img = F.normalize(img, mean=mean, std=std)
-                #print(f"After Normalize: {img.shape}")
+                print(f"After Normalize: {img.shape}")
             except Exception as e:
                 print(f"Error in normalization for image {idx}: {e}")
                 print(f"Image shape: {img.shape}, mean: {mean}, std: {std}")
@@ -596,7 +600,7 @@ def main():
     }
 
     # Initialize data augmentations
-    config['augmentations'] = BYOLAugmentations(image_size=36)  # Adjust image_size based on your dataset
+    config['augmentations'] = BYOLAugmentations(image_size=(36, 36))  # Fixed image size
 
     # Initialize and start training
     wandb.init(
