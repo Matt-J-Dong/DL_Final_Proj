@@ -80,7 +80,7 @@ class Trainer:
                                                     num_training_steps=self.config["num_epochs"] * len(train_loader), 
                                                     initial_lr=self.config["learning_rate"], 
                                                     final_lr=1e-8)
-        scheduler = CosineAnnealingLR(optimizer, T_max=self.config["num_epochs"], eta_min=1e-6)
+        # scheduler = CosineAnnealingLR(optimizer, T_max=self.config["num_epochs"], eta_min=1e-6)
         # optimizer = torch.optim.SGD(model.parameters(), lr=self.config['learning_rate'], momentum=self.config['momentum'], weight_decay=1e-4)
         # scheduler = StepLR(optimizer, step_size=50, gamma=0.4)  # Reduce LR by 50% every 5 epochs
 
