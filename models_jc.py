@@ -27,10 +27,10 @@ class Encoder(nn.Module):
         # ResNet-like layers
         self.layer1 = self._make_layer(BasicBlock, in_channels=64, out_channels=64, num_blocks=2, stride=1)
         self.layer2 = self._make_layer(BasicBlock, in_channels=64, out_channels=128, num_blocks=2, stride=2)
-        self.layer3 = self._make_layer(BasicBlock, in_channels=128, out_channels=256, num_blocks=2, stride=2)
+        # self.layer3 = self._make_layer(BasicBlock, in_channels=128, out_channels=256, num_blocks=2, stride=2)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(256, output_dim)
+        self.fc = nn.Linear(128, output_dim)
 
     def _make_layer(self, block, in_channels, out_channels, num_blocks, stride=1):
         downsample = None
@@ -57,7 +57,7 @@ class Encoder(nn.Module):
         x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
-        x = self.layer3(x)
+        # x = self.layer3(x)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
@@ -119,7 +119,7 @@ class JEPA_Model(nn.Module):
 
         self.encoder = Encoder(output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
 
-        self.expander = Expander(input_dim=repr_dim, hidden_dim=1024, output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
+        # self.expander = Expander(input_dim=repr_dim, hidden_dim=1024, output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
 
         self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim, hidden_dim=1024, dropout_prob=dropout_prob).to(device)
 
@@ -148,7 +148,7 @@ class JEPA_Model(nn.Module):
         pred_encs = []
 
         s_prev = self.encoder(init_state)
-        s_prev = self.expander(s_prev)  # Pass encoder output through expander
+        # s_prev = self.expander(s_prev)  # Pass encoder output through expander
         s_prev = self.batch_norm(s_prev)  # Apply BatchNorm to embeddings
         pred_encs.append(s_prev)
 
