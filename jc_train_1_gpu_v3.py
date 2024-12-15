@@ -157,7 +157,7 @@ def main():
         "max_grad_norm": 1.0,
         "min_variance": 1.0,
         "save_every": 1,
-        'margin': 1.0,
+        'margin': 0.5,
         'distance_function': 'l2',
     }
 
