@@ -110,7 +110,7 @@ class Trainer:
                                "contrastive_loss": contra_loss,
                                'lr': optimizer.param_groups[0]['lr']})
 
-                if batch_idx % 100 == 0:
+                if batch_idx % 100 == 0 and batch_idx != 0:
                     print(f"Epoch [{epoch}/{self.config['num_epochs']}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}")
                     self.save_model(model, f"{epoch}_batch_{batch_idx}")
                     self.validate_model(model, val_train_ds, val_val_ds)
