@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader, random_split
 from tqdm.auto import tqdm
 import os
 import torchvision.transforms.functional as F
+import numpy as np
 
 # Replace these imports with your actual modules
 from dataset_md import create_wall_dataloader  # Custom data loader
@@ -152,15 +153,28 @@ class BYOLAugmentations:
         # x is a batch tensor: [N, C, H, W]
         # Apply augmentation per image
         augmented = []
-        for img in x:
+        for idx, img in enumerate(x):
+            # Debugging: Print image shape
+            # print(f"Augmenting image {idx} with shape: {img.shape}")  # Uncomment for debugging
+
+            # Ensure the tensor is writable by making a copy
+            img = img.clone()
+
             # Apply RandomResizedCrop
-            i, j, h, w = RandomResizedCrop.get_params(img, scale=(0.2, 1.0), ratio=(3./4., 4./3.))
-            img = F.resized_crop(img, i, j, h, w, self.image_size, interpolation=F.InterpolationMode.BILINEAR)
+            try:
+                i, j, h, w = RandomResizedCrop.get_params(img, scale=(0.2, 1.0), ratio=(3./4., 4./3.))
+                img = F.resized_crop(img, i, j, h, w, self.image_size, interpolation=F.InterpolationMode.BILINEAR)
+            except Exception as e:
+                print(f"Error in RandomResizedCrop for image {idx}: {e}")
+                raise e
+
             # Apply RandomHorizontalFlip
-            if torch.rand(1) < 0.5:
+            if torch.rand(1).item() < 0.5:
                 img = F.hflip(img)
+
             # Apply GaussianBlur
             img = F.gaussian_blur(img, kernel_size=3, sigma=(0.1, 2.0))
+
             # Normalize
             if img.shape[0] == 2:
                 mean = (0.5, 0.5)
@@ -171,7 +185,13 @@ class BYOLAugmentations:
             else:
                 mean = (0.5, 0.5, 0.5)
                 std = (0.5, 0.5, 0.5)
-            img = F.normalize(img, mean=mean, std=std)
+            try:
+                img = F.normalize(img, mean=mean, std=std)
+            except Exception as e:
+                print(f"Error in normalization for image {idx}: {e}")
+                print(f"Image shape: {img.shape}, mean: {mean}, std: {std}")
+                raise e
+
             augmented.append(img)
         augmented = torch.stack(augmented).to(x.device)
         return augmented
@@ -202,7 +222,7 @@ class Trainer:
         for param in self.target_network.parameters():
             param.requires_grad = False
         
-        # Optimizer
+        # Optimizer: Update only the online predictor parameters
         self.optimizer = optim.Adam(self.online_network.online_predictor.parameters(), lr=self.config['learning_rate'])
         
         # Scheduler (optional)
@@ -281,7 +301,7 @@ class Trainer:
                 if locations is not None and locations.numel() > 0:
                     print(f"{name} 'locations' shape: {locations.shape}")
                 else:
-                    print(f"{name} does not have 'locations' attribute or it's empty, so the shape is [{batch_size},0]")
+                    print(f"{name} does not have 'locations' attribute or it's empty.")
             except Exception as e:
                 print(f"Error inspecting {name} DataLoader: {e}")
 
@@ -405,7 +425,7 @@ class Trainer:
             online_net.train()
             total_loss = 0.0
             progress_bar = tqdm(self.train_loader, desc=f"Epoch {epoch}/{self.config['epochs']}")
-            
+
             for batch_idx, batch in enumerate(progress_bar):
                 # Assuming batch has 'states' and 'actions' attributes
                 # Use 'states' as images
@@ -413,45 +433,55 @@ class Trainer:
                 if x is None:
                     print("Batch does not have 'states' attribute. Skipping this batch.")
                     continue
+                # Fix non-writable tensor warning by making a writable copy
+                if not x.is_contiguous():
+                    x = x.contiguous()
+                # Ensure x is writable
+                if not x.requires_grad:
+                    x = x.clone()
                 x = x.to(self.device)
-                
+
                 # Apply two separate augmentations
-                x1 = self.augmentations(x)
-                x2 = self.augmentations(x)
-                
+                try:
+                    x1 = self.augmentations(x)
+                    x2 = self.augmentations(x)
+                except Exception as e:
+                    print(f"Error during augmentation: {e}")
+                    continue
+
                 # Forward pass through online network
                 z1_online, p1 = online_net.forward_online(x1)
                 z2_online, p2 = online_net.forward_online(x2)
-                
+
                 # Forward pass through target network
                 with torch.no_grad():
                     z1_target = target_net.forward_target(x1)
                     z2_target = target_net.forward_target(x2)
-                
+
                 # Compute loss
                 loss = cosine_similarity_loss(p1, z2_target) + cosine_similarity_loss(p2, z1_target)
-                
+
                 # Backpropagation
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-                
+
                 # Update target network with momentum
                 update_target_network(online_net, target_net, self.config['momentum'])
-                
+
                 total_loss += loss.item()
-                
+
                 # Update progress bar
                 progress_bar.set_postfix({"loss": loss.item()})
-            
+
             avg_train_loss = total_loss / len(self.train_loader)
-            
+
             # Validation
             self.validate_model(online_net, epoch, avg_train_loss, self.optimizer)
-            
+
             # Step the scheduler
             self.scheduler.step()
-            
+
             # Save model checkpoint after each epoch
             checkpoint_path = os.path.join(self.config["save_dir"], f"byol_new_v2_epoch_{epoch}.pth")
             torch.save({
@@ -485,7 +515,7 @@ class Trainer:
 def main():
     import wandb
     from dotenv import load_dotenv
-    
+
     load_dotenv()
     WANDB_API_KEY = os.getenv("WANDB_API_KEY")
     if WANDB_API_KEY:
@@ -493,7 +523,7 @@ def main():
         wandb.login(key=WANDB_API_KEY)
     else:
         print("WANDB_API_KEY not found. Proceeding without W&B logging.")
-    
+
     # Configuration dictionary
     config = {
         "batch_size": 128,
