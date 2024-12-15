@@ -30,7 +30,7 @@ class Encoder(nn.Module):
         # self.layer3 = self._make_layer(BasicBlock, in_channels=128, out_channels=256, num_blocks=2, stride=2)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(256, output_dim)
+        self.fc = nn.Linear(128, output_dim)
 
     def _make_layer(self, block, in_channels, out_channels, num_blocks, stride=1):
         downsample = None
