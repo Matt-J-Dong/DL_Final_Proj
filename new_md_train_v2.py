@@ -176,8 +176,8 @@ class BYOLAugmentations:
         # Apply augmentation per image
         augmented = []
         for idx, img in enumerate(x):
-            print(f"\n--- Augmenting image {idx} ---")
-            print(f"Original image shape: {img.shape}")
+            #print(f"\n--- Augmenting image {idx} ---")
+            #print(f"Original image shape: {img.shape}")
             
             # Check if img has 3 dimensions [C, H, W]
             if img.dim() != 3:
@@ -192,7 +192,7 @@ class BYOLAugmentations:
             try:
                 i, j, h, w = RandomResizedCrop.get_params(img, scale=(0.2, 1.0), ratio=(3./4., 4./3.))
                 img = F.resized_crop(img, i, j, h, w, self.image_size, interpolation=F.InterpolationMode.BILINEAR)
-                print(f"After RandomResizedCrop: {img.shape}")
+                #print(f"After RandomResizedCrop: {img.shape}")
             except Exception as e:
                 print(f"Error in RandomResizedCrop for image {idx}: {e}")
                 raise e
@@ -200,11 +200,11 @@ class BYOLAugmentations:
             # Apply RandomHorizontalFlip
             if torch.rand(1).item() < 0.5:
                 img = F.hflip(img)
-                print("Applied RandomHorizontalFlip")
+                #print("Applied RandomHorizontalFlip")
 
             # Apply GaussianBlur
             img = F.gaussian_blur(img, kernel_size=3, sigma=(0.1, 2.0))
-            print(f"After GaussianBlur: {img.shape}")
+            #print(f"After GaussianBlur: {img.shape}")
 
             # Normalize
             channels = img.shape[0]
@@ -221,7 +221,7 @@ class BYOLAugmentations:
             print(f"Normalization mean: {mean}, std: {std}")
             try:
                 img = F.normalize(img, mean=mean, std=std)
-                print(f"After Normalize: {img.shape}")
+                #print(f"After Normalize: {img.shape}")
             except Exception as e:
                 print(f"Error in normalization for image {idx}: {e}")
                 print(f"Image shape: {img.shape}, mean: {mean}, std: {std}")
