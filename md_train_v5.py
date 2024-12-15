@@ -7,14 +7,14 @@ from tqdm.auto import tqdm
 import os
 from torch.utils.data import random_split, DataLoader
 from dataset_md import create_wall_dataloader
-from models_md_v4 import JEPA_Model
+from models_md_v5 import JEPA_Model
 from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR
 import wandb
 from dotenv import load_dotenv
 from evaluator_md import ProbingEvaluator, ProbingConfig
 import torch.multiprocessing as mp
 
-model_version = "v4"
+model_version = "v5"
 model_size = 128  # Updated to match repr_dim in the checkpoint
 
 load_dotenv()
