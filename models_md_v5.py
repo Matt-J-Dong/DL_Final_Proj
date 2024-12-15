@@ -23,7 +23,7 @@ class Encoder(nn.Module):
     Recurrent Neural Network (RNN) based Encoder.
     Replaces the previous CNN-based Encoder to process image data as sequences.
     """
-    def __init__(self, output_dim=128, dropout_prob=0.0):  # Updated default to 128
+    def __init__(self, output_dim=128, dropout_prob=0.0):
         super(Encoder, self).__init__()
         self.output_dim = output_dim
         self.dropout_prob = dropout_prob
@@ -94,7 +94,7 @@ class Predictor(nn.Module):
 
 
 class Expander(nn.Module):
-    def __init__(self, input_dim=128, hidden_dim=512, output_dim=128, dropout_prob=0.0):  # Updated input_dim and output_dim to 128
+    def __init__(self, input_dim=128, hidden_dim=512, output_dim=128, dropout_prob=0.0):
         super(Expander, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.bn1 = nn.BatchNorm1d(hidden_dim)
@@ -120,7 +120,7 @@ class Expander(nn.Module):
 
 
 class JEPA_Model(nn.Module):
-    def __init__(self, device="cuda", repr_dim=128, action_dim=2, dropout_prob=0.0, margin=1.0):  # Added 'margin'
+    def __init__(self, device="cuda", repr_dim=128, action_dim=2, dropout_prob=0.0, margin=1.0):
         super(JEPA_Model, self).__init__()
         self.device = device
         self.repr_dim = repr_dim
@@ -445,25 +445,54 @@ class JEPA_Model(nn.Module):
         else:
             return (loss, energy, var, cov, contrastive, negative)
 
+
 class Prober(torch.nn.Module):
     def __init__(
         self,
         embedding: int,
         arch: str,
-        output_shape,
+        output_shape: List[int],
     ):
         super().__init__()
-        if isinstance(output_shape, torch.Size) or isinstance(output_shape, tuple):
+        
+        # Debugging: Print the type and value of output_shape
+        print(f"Prober __init__: Received output_shape type: {type(output_shape)}, value: {output_shape}")
+        
+        # Convert output_shape to list if it's a tuple or torch.Size
+        if isinstance(output_shape, (torch.Size, tuple)):
             output_shape = list(output_shape)
+            print(f"Prober __init__: Converted output_shape to list: {output_shape}")
+        elif isinstance(output_shape, list):
+            print(f"Prober __init__: output_shape is already a list: {output_shape}")
+        else:
+            raise TypeError(f"Prober __init__: output_shape must be a list, tuple, or torch.Size, got {type(output_shape)}")
+        
+        # Assert that all elements in output_shape are integers
+        if not all(isinstance(x, int) for x in output_shape):
+            raise TypeError("Prober __init__: All elements in output_shape must be integers.")
+        
         self.output_dim = np.prod(output_shape)
         self.output_shape = output_shape
         self.arch = arch
 
         arch_list = list(map(int, arch.split("-"))) if arch != "" else []
         f = [embedding] + arch_list + [self.output_dim]
+        print(f"Prober __init__: Architecture dimensions: {f}")
+        
         layers = []
         for i in range(len(f) - 2):
-            layers.append(torch.nn.Linear(f[i], f[i + 1]))
+            in_features = f[i]
+            out_features = f[i + 1]
+            print(f"Prober __init__: Adding Linear layer with in_features={in_features}, out_features={out_features}")
+            layers.append(torch.nn.Linear(in_features, out_features))
             layers.append(torch.nn.ReLU(True))
-        layers.append(torch.nn.Linear(f[-2], f[-1]))
+        # Final Linear layer
+        in_features = f[-2]
+        out_features = f[-1]
+        print(f"Prober __init__: Adding final Linear layer with in_features={in_features}, out_features={out_features}")
+        layers.append(torch.nn.Linear(in_features, out_features))
         self.prober = torch.nn.Sequential(*layers)
+
+    def forward(self, e):
+        output = self.prober(e)
+        return output
