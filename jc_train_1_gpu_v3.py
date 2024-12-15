@@ -153,7 +153,7 @@ def main():
         "lambda_energy": 1.0,
         "lambda_var": 25.0,
         "lambda_cov": 1.0,
-        'lambda_contrastive': 2.0,
+        'lambda_contrastive': 1.0,
         "max_grad_norm": 1.0,
         "min_variance": 1.0,
         "save_every": 1,
