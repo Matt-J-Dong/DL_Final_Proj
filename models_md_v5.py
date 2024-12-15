@@ -1,4 +1,4 @@
-# models_md_v3.py
+# models_md_v5.py
 
 from typing import List
 import torch
@@ -23,7 +23,7 @@ class Encoder(nn.Module):
     Recurrent Neural Network (RNN) based Encoder.
     Replaces the previous CNN-based Encoder to process image data as sequences.
     """
-    def __init__(self, output_dim=128, dropout_prob=0.0):
+    def __init__(self, output_dim=128, dropout_prob=0.0):  # Updated default to 128
         super(Encoder, self).__init__()
         self.output_dim = output_dim
         self.dropout_prob = dropout_prob
@@ -94,7 +94,7 @@ class Predictor(nn.Module):
 
 
 class Expander(nn.Module):
-    def __init__(self, input_dim=128, hidden_dim=512, output_dim=128, dropout_prob=0.0):
+    def __init__(self, input_dim=128, hidden_dim=512, output_dim=128, dropout_prob=0.0):  # Updated input_dim and output_dim to 128
         super(Expander, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.bn1 = nn.BatchNorm1d(hidden_dim)
@@ -120,7 +120,7 @@ class Expander(nn.Module):
 
 
 class JEPA_Model(nn.Module):
-    def __init__(self, device="cuda", repr_dim=128, action_dim=2, dropout_prob=0.0, margin=1.0):
+    def __init__(self, device="cuda", repr_dim=128, action_dim=2, dropout_prob=0.0, margin=1.0):  # Added 'margin'
         super(JEPA_Model, self).__init__()
         self.device = device
         self.repr_dim = repr_dim
@@ -143,6 +143,7 @@ class JEPA_Model(nn.Module):
         self.target_encoder.load_state_dict(self.encoder.state_dict())
         for param in self.target_encoder.parameters():
             param.requires_grad = False
+
 
     def forward(self, init_state, actions):
         """
@@ -171,6 +172,7 @@ class JEPA_Model(nn.Module):
 
         pred_encs = torch.stack(pred_encs, dim=1)
         return pred_encs
+
 
     def variance_regularization(self, pred_encs, target_encs, epsilon=1e-4, min_variance=1.0):
         # Ensure consistent 3D shape [B, T, D]
@@ -201,6 +203,7 @@ class JEPA_Model(nn.Module):
         variance_loss = pred_variance_loss + target_variance_loss
         
         return variance_loss
+
 
     def covariance_regularization(self, pred_encs, target_encs, epsilon=1e-4):
         def off_diagonal(matrix):
@@ -238,6 +241,7 @@ class JEPA_Model(nn.Module):
         # Combine covariance loss for both predicted and target embeddings
         cov_loss = off_diag_pred + off_diag_target
         return cov_loss
+
 
     def compute_energy(self, predicted_encs, target_encs, distance_function="l2"):
         """
@@ -351,6 +355,7 @@ class JEPA_Model(nn.Module):
 
         return loss.item(), energy.item(), var.item(), cov.item(), contrastive.item(), negative.item()
 
+
     def contrastive_loss(self, pred_encs, target_encs, margin=1.0):
         """
         Compute contrastive loss for embeddings.
@@ -381,6 +386,7 @@ class JEPA_Model(nn.Module):
         loss = torch.mean(torch.relu(margin - positive_pairs + closest_negative_pairs))
         return loss
 
+
     def compute_loss(self, 
                  pred_encs, 
                  target_encs, 
@@ -390,8 +396,8 @@ class JEPA_Model(nn.Module):
                  lambda_var=1.0, 
                  lambda_cov=1.0, 
                  lambda_contrastive=0.1, 
-                 lambda_negative=0.5,
-                 margin=1.0,
+                 lambda_negative=0.5,  # Weight for negative sampling loss
+                 margin=1.0,           # Margin for contrastive loss
                  debug=False, 
                  min_variance=1.0,
                  *args, **kwargs):
@@ -424,13 +430,13 @@ class JEPA_Model(nn.Module):
 
         # Add regularization terms
         var = lambda_var * self.variance_regularization(pred_encs, target_encs, min_variance=min_variance)
-        cov = lambda_cov * self.covariance_regularization(pred_encs, target_encs)
+        cov = lambda_cov * self.covariance_regularization(pred_encs, target_encs,)
 
         # Compute contrastive loss
         contrastive = lambda_contrastive * self.contrastive_loss(pred_encs, target_encs, margin=margin)
 
         # Compute negative sampling loss
-        negative = lambda_negative * self.compute_energy(pred_encs, negative_encs, distance_function)
+        negative = lambda_negative * self.compute_negative_energy(pred_encs, negative_encs, distance_function)
 
         # Total loss
         loss = energy + var + cov + contrastive + negative
@@ -438,4 +444,3 @@ class JEPA_Model(nn.Module):
             return loss, energy, var, cov, contrastive, negative
         else:
             return (loss, energy, var, cov, contrastive, negative)
-

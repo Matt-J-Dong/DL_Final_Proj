@@ -1,4 +1,4 @@
-# md_train_v4.py
+# md_train_v5.py
 
 import torch
 import torch.nn as nn
@@ -27,7 +27,6 @@ if torch.cuda.is_available():
 else:
     device = torch.device('cpu')
 
-#mp.set_start_method('spawn', force=True)
 
 class Trainer:
     def __init__(self, config):
@@ -136,7 +135,7 @@ class Trainer:
             epochs=20,
             schedule=None,
             sample_timesteps=30,
-            prober_arch="256",
+            prober_arch="128",
         )
 
         # Initialize ProbingEvaluator with probing training and validation datasets
@@ -212,7 +211,7 @@ class Trainer:
         train_loader, val_loader = self.load_data()
         model = JEPA_Model(
             device=self.device, 
-            repr_dim=model_size, 
+            repr_dim=model_size,  # Set to 128 to match the checkpoint
             action_dim=2, 
             dropout_prob=self.config.get("dropout_prob", 0),
             margin=self.config.get("margin", 1.0)  # Pass margin to the model
@@ -264,7 +263,7 @@ class Trainer:
                 if batch_idx % 100 == 0:
                     print(f"Epoch [{epoch}/{self.config['num_epochs']}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}")
                     self.save_model(model, f"{epoch}_batch_{batch_idx}")
-                    #Perform validation
+                    # Perform validation
                     val_loss = self.validate_model(model, epoch, epoch_loss / (batch_idx + 1), optimizer)
                     wandb.log({"val_loss": val_loss})
 
@@ -312,6 +311,7 @@ def main():
 
     trainer = Trainer(config)
     trainer.train()
+
 
 if __name__ == "__main__":
     main()
