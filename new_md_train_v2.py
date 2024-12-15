@@ -11,9 +11,11 @@ import os
 import torchvision.transforms.functional as F
 import numpy as np
 
-# Replace these imports with your actual modules
 from dataset_md import create_wall_dataloader  # Custom data loader
 from evaluator_md import ProbingEvaluator, ProbingConfig  # Custom evaluator
+
+import wandb
+from dotenv import load_dotenv
 
 model_version = "v2"
 model_size = 64
