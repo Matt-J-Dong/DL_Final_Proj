@@ -183,22 +183,44 @@ class JEPA_Model(nn.Module):
 
         return loss
     
+    def compute_variance(self, pred_encs):
+        """
+        Compute the variance of the predicted embeddings.
+
+        Args:
+            pred_encs: Predicted embeddings (B, T, D).
+            target_encs: Target embeddings (B, T, D).
+
+        Returns:
+            variance: Variance of the predicted embeddings.
+        """
+        return torch.sqrt(pred_encs.var(dim=0))
+    
+    def compute_dimensional_covariance(self, pred_encs):
+        """
+        Compute the covariance of the predicted embeddings.
+
+        Args:
+            pred_encs: Predicted embeddings (B, T, D).
+            target_encs: Target embeddings (B, T, D).
+
+        Returns:
+            covariance: Covariance of the predicted embeddings.
+        """
+        return torch.matmul(pred_encs.T, pred_encs) / (pred_encs.size(0) - 1) 
+    
+    
 
     def train_step(self, 
                    states, 
                    actions, 
                    optimizer,
                    scheduler, 
-                   momentum=0.99, 
+                   momentum=0.99,
+                   target_decay=0.99, 
                    distance_function="l2", 
-                   lambda_energy=1.0, 
-                   lambda_var=1.0, 
-                   lambda_cov=1.0,
                    debug=False,
                    max_grad_norm=0.5,
-                   min_variance = 1.0,
-                   lambda_contrastive=0.1,
-                   margin=1.0,
                    *args, **kwargs):
         """
         Perform a single training step.
@@ -222,38 +244,27 @@ class JEPA_Model(nn.Module):
             target_encs.append(s_target)
         target_encs = torch.stack(target_encs, dim=1)
 
-        # Compute the loss function
-        if not debug:
-            loss = self.compute_loss(pred_encs, 
-                                     target_encs, 
-                                     distance_function, 
-                                     lambda_energy, 
-                                     lambda_var, 
-                                     lambda_cov, 
-                                     lambda_contrastive=lambda_contrastive,
-                                     margin=margin,
-                                     min_variance=min_variance)
-        else:
-            loss, energy, var, cov, contrastive = self.compute_loss(pred_encs, 
-                                                       target_encs, 
-                                                       distance_function, 
-                                                       lambda_energy, 
-                                                       lambda_var, 
-                                                       lambda_cov, 
-                                                       lambda_contrastive=lambda_contrastive,
-                                                       min_variance=min_variance, 
-                                                       margin=margin,
-                                                       debug=True)
 
+        loss = self.compute_loss(pred_encs, 
+                                target_encs, 
+                                distance_function, )
+        
+        if debug:
+            energy = self.compute_energy(pred_encs, target_encs, distance_function)
+            variance = self.compute_variance(pred_encs)
+            covariance = self.compute_dimensional_covariance(pred_encs)
 
         # Backpropagation
         optimizer.zero_grad()
         loss.backward()
 
+
         # max_grad_norm = 0.1  # Set the maximum norm for gradients
         torch.nn.utils.clip_grad_norm_(self.parameters(), max_grad_norm)
 
         optimizer.step()
+        self.update_target_encoder(momentum=target_decay)
+
         scheduler.step()
 
         # Update target encoder using momentum
@@ -261,6 +272,6 @@ class JEPA_Model(nn.Module):
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
 
-        return loss.item() if not debug else (loss.item(), energy.item(), var.item(), cov.item(), contrastive.item())
+        return loss.item() if not debug else (loss.item(), energy.item(), variance.item(), covariance.item())
 
 
