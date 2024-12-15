@@ -1,3 +1,5 @@
+# models_md_v3.py
+
 from typing import List
 import torch
 import torch.nn as nn
@@ -118,12 +120,13 @@ class Expander(nn.Module):
 
 
 class JEPA_Model(nn.Module):
-    def __init__(self, device="cuda", repr_dim=128, action_dim=2, dropout_prob=0.0):
+    def __init__(self, device="cuda", repr_dim=128, action_dim=2, dropout_prob=0.0, margin=1.0):
         super(JEPA_Model, self).__init__()
         self.device = device
         self.repr_dim = repr_dim
         self.action_dim = action_dim
         self.dropout_prob = dropout_prob
+        self.margin = margin  # Margin for contrastive loss
 
         self.encoder = Encoder(output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
 
@@ -140,7 +143,6 @@ class JEPA_Model(nn.Module):
         self.target_encoder.load_state_dict(self.encoder.state_dict())
         for param in self.target_encoder.parameters():
             param.requires_grad = False
-
 
     def forward(self, init_state, actions):
         """
@@ -169,7 +171,6 @@ class JEPA_Model(nn.Module):
 
         pred_encs = torch.stack(pred_encs, dim=1)
         return pred_encs
-
 
     def variance_regularization(self, pred_encs, target_encs, epsilon=1e-4, min_variance=1.0):
         # Ensure consistent 3D shape [B, T, D]
@@ -200,8 +201,6 @@ class JEPA_Model(nn.Module):
         variance_loss = pred_variance_loss + target_variance_loss
         
         return variance_loss
-
-
 
     def covariance_regularization(self, pred_encs, target_encs, epsilon=1e-4):
         def off_diagonal(matrix):
@@ -240,9 +239,6 @@ class JEPA_Model(nn.Module):
         cov_loss = off_diag_pred + off_diag_target
         return cov_loss
 
-
-
-
     def compute_energy(self, predicted_encs, target_encs, distance_function="l2"):
         """
         Compute the energy function.
@@ -264,6 +260,27 @@ class JEPA_Model(nn.Module):
             raise ValueError(f"Unknown distance function: {distance_function}")
         return energy
 
+    def compute_negative_energy(self, predicted_encs, negative_encs, distance_function="l2"):
+        """
+        Compute the energy for negative (bad) pairs.
+
+        Args:
+            predicted_encs: [B, T, D] - Predicted latent representations
+            negative_encs: [B, T, D] - Negative latent representations
+            distance_function: str - Distance metric ("l2" or "cosine")
+
+        Returns:
+            negative_energy: Scalar energy value for negative pairs
+        """
+        if distance_function == "l2":
+            negative_energy = torch.sum((predicted_encs - negative_encs) ** 2) / (predicted_encs.size(0) * predicted_encs.size(1))
+        elif distance_function == "cosine":
+            cos = nn.CosineSimilarity(dim=-1)
+            negative_energy = -torch.sum(cos(predicted_encs, negative_encs)) / (predicted_encs.size(0) * predicted_encs.size(1))
+        else:
+            raise ValueError(f"Unknown distance function: {distance_function}")
+        return negative_energy
+
     def train_step(self, 
                    states, 
                    actions, 
@@ -274,11 +291,9 @@ class JEPA_Model(nn.Module):
                    lambda_energy=1.0, 
                    lambda_var=1.0, 
                    lambda_cov=1.0,
-                   debug=False,
-                   max_grad_norm=0.5,
-                   min_variance = 1.0,
                    lambda_contrastive=0.1,
-                   margin=1.0,
+                   lambda_negative=0.5,  # Weight for negative loss
+                   margin=1.0,           # Margin for contrastive loss
                    *args, **kwargs):
         """
         Perform a single training step.
@@ -302,36 +317,29 @@ class JEPA_Model(nn.Module):
             target_encs.append(s_target)
         target_encs = torch.stack(target_encs, dim=1)
 
-        # Compute the loss function
-        if not debug:
-            loss = self.compute_loss(pred_encs, 
-                                     target_encs, 
-                                     distance_function, 
-                                     lambda_energy, 
-                                     lambda_var, 
-                                     lambda_cov, 
-                                     lambda_contrastive=lambda_contrastive,
-                                     margin=margin,
-                                     min_variance=min_variance)
-        else:
-            loss, energy, var, cov, contrastive = self.compute_loss(pred_encs, 
-                                                       target_encs, 
-                                                       distance_function, 
-                                                       lambda_energy, 
-                                                       lambda_var, 
-                                                       lambda_cov, 
-                                                       lambda_contrastive=lambda_contrastive,
-                                                       min_variance=min_variance, 
-                                                       margin=margin,
-                                                       debug=True)
+        # Generate negative embeddings by shuffling target encodings
+        negative_encs = target_encs[torch.randperm(B)].to(self.device)
 
+        # Compute the loss function
+        loss, energy, var, cov, contrastive, negative = self.compute_loss(
+            pred_encs, 
+            target_encs, 
+            negative_encs, 
+            distance_function, 
+            lambda_energy, 
+            lambda_var, 
+            lambda_cov, 
+            lambda_contrastive, 
+            lambda_negative, 
+            margin
+        )
 
         # Backpropagation
         optimizer.zero_grad()
         loss.backward()
 
         # Clip gradients to prevent exploding gradients
-        torch.nn.utils.clip_grad_norm_(self.parameters(), max_grad_norm)
+        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
 
         optimizer.step()
         scheduler.step()
@@ -341,8 +349,7 @@ class JEPA_Model(nn.Module):
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
 
-        return loss.item() if not debug else (loss.item(), energy.item(), var.item(), cov.item(), contrastive.item())
-    
+        return loss.item(), energy.item(), var.item(), cov.item(), contrastive.item(), negative.item()
 
     def contrastive_loss(self, pred_encs, target_encs, margin=1.0):
         """
@@ -374,60 +381,61 @@ class JEPA_Model(nn.Module):
         loss = torch.mean(torch.relu(margin - positive_pairs + closest_negative_pairs))
         return loss
 
-
     def compute_loss(self, 
                  pred_encs, 
                  target_encs, 
+                 negative_encs,
                  distance_function="l2", 
                  lambda_energy=1.0, 
                  lambda_var=1.0, 
                  lambda_cov=1.0, 
                  lambda_contrastive=0.1, 
-                 margin=1.0, 
+                 lambda_negative=0.5,
+                 margin=1.0,
                  debug=False, 
                  min_variance=1.0,
                  *args, **kwargs):
         """
-        Compute the loss function with contrastive loss added.
+        Compute the loss function with contrastive loss and negative sampling.
+
+        Args:
+            pred_encs: [B, T, D] - Predicted embeddings
+            target_encs: [B, T, D] - Target embeddings
+            negative_encs: [B, T, D] - Negative embeddings
+            distance_function: str - Distance metric ("l2" or "cosine")
+            lambda_energy: float - Weight for energy loss
+            lambda_var: float - Weight for variance regularization
+            lambda_cov: float - Weight for covariance regularization
+            lambda_contrastive: float - Weight for contrastive loss
+            lambda_negative: float - Weight for negative sampling loss
+            margin: float - Margin for contrastive loss
+            debug: bool - If True, return individual loss components
+
+        Returns:
+            loss: Total loss
+            energy: Energy loss
+            var: Variance regularization loss
+            cov: Covariance regularization loss
+            contrastive: Contrastive loss
+            negative: Negative sampling loss
         """
         # Compute the energy function (distance between predicted and target states)
         energy = lambda_energy * self.compute_energy(pred_encs, target_encs, distance_function)
 
         # Add regularization terms
         var = lambda_var * self.variance_regularization(pred_encs, target_encs, min_variance=min_variance)
-        cov = lambda_cov * self.covariance_regularization(pred_encs, target_encs,)
+        cov = lambda_cov * self.covariance_regularization(pred_encs, target_encs)
 
         # Compute contrastive loss
         contrastive = lambda_contrastive * self.contrastive_loss(pred_encs, target_encs, margin=margin)
 
+        # Compute negative sampling loss
+        negative = lambda_negative * self.compute_energy(pred_encs, negative_encs, distance_function)
+
         # Total loss
-        loss = energy + var + cov + contrastive
+        loss = energy + var + cov + contrastive + negative
         if not debug:
-            return loss
+            return loss, energy, var, cov, contrastive, negative
         else:
-            return (loss, energy, var, cov, contrastive)
+            return (loss, energy, var, cov, contrastive, negative)
 
-class Prober(torch.nn.Module):
-    def __init__(
-        self,
-        embedding: int,
-        arch: str,
-        output_shape: List[int],
-    ):
-        super().__init__()
-        self.output_dim = np.prod(output_shape)
-        self.output_shape = output_shape
-        self.arch = arch
-
-        arch_list = list(map(int, arch.split("-"))) if arch != "" else []
-        f = [embedding] + arch_list + [self.output_dim]
-        layers = []
-        for i in range(len(f) - 2):
-            layers.append(torch.nn.Linear(f[i], f[i + 1]))
-            layers.append(torch.nn.ReLU(True))
-        layers.append(torch.nn.Linear(f[-2], f[-1]))
-        self.prober = torch.nn.Sequential(*layers)
-
-    def forward(self, e):
-        output = self.prober(e)
-        return output
