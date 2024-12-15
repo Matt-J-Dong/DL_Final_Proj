@@ -444,3 +444,26 @@ class JEPA_Model(nn.Module):
             return loss, energy, var, cov, contrastive, negative
         else:
             return (loss, energy, var, cov, contrastive, negative)
+
+class Prober(torch.nn.Module):
+    def __init__(
+        self,
+        embedding: int,
+        arch: str,
+        output_shape,
+    ):
+        super().__init__()
+        if isinstance(output_shape, torch.Size) or isinstance(output_shape, tuple):
+            output_shape = list(output_shape)
+        self.output_dim = np.prod(output_shape)
+        self.output_shape = output_shape
+        self.arch = arch
+
+        arch_list = list(map(int, arch.split("-"))) if arch != "" else []
+        f = [embedding] + arch_list + [self.output_dim]
+        layers = []
+        for i in range(len(f) - 2):
+            layers.append(torch.nn.Linear(f[i], f[i + 1]))
+            layers.append(torch.nn.ReLU(True))
+        layers.append(torch.nn.Linear(f[-2], f[-1]))
+        self.prober = torch.nn.Sequential(*layers)
