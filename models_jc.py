@@ -119,7 +119,7 @@ class JEPA_Model(nn.Module):
 
         self.encoder = Encoder(output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
 
-        self.expander = Expander(input_dim=repr_dim, hidden_dim=1024, output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
+        # self.expander = Expander(input_dim=repr_dim, hidden_dim=1024, output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
 
         self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim, hidden_dim=1024, dropout_prob=dropout_prob).to(device)
 
@@ -148,7 +148,7 @@ class JEPA_Model(nn.Module):
         pred_encs = []
 
         s_prev = self.encoder(init_state)
-        s_prev = self.expander(s_prev)  # Pass encoder output through expander
+        # s_prev = self.expander(s_prev)  # Pass encoder output through expander
         s_prev = self.batch_norm(s_prev)  # Apply BatchNorm to embeddings
         pred_encs.append(s_prev)
 
