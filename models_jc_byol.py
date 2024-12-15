@@ -114,11 +114,17 @@ class Expander(nn.Module):
         return x
 
 class JEPA_Model(nn.Module):
-    def __init__(self, repr_dim=256):
+    def __init__(self, device='cuda', repr_dim=256,action_dim=2, dropout_prob=0.1):
+
+        self.device = device
+        self.repr_dim = repr_dim
+        self.action_dim = action_dim
+        self.dropout_prob = dropout_prob
+
         super(JEPA_Model, self).__init__()
-        self.encoder = Encoder(output_dim=repr_dim)
-        self.predictor = Predictor(input_dim=repr_dim + 2, output_dim=repr_dim)
-        self.target_encoder = Encoder(output_dim=repr_dim)
+        self.encoder = Encoder(output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
+        self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim).to(device)
+        self.target_encoder = Encoder(output_dim=repr_dim).to(device)
 
         # Initialize target encoder with online encoder weights
         self.target_encoder.load_state_dict(self.encoder.state_dict())
