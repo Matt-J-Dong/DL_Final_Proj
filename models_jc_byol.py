@@ -223,31 +223,33 @@ class JEPA_Model(nn.Module):
     
     def compute_variance(self, pred_encs):
         """
-        Compute the variance of the predicted embeddings.
+        Compute the mean variance of predicted embeddings across dimensions.
 
         Args:
             pred_encs: Predicted embeddings (B, T, D).
-            target_encs: Target embeddings (B, T, D).
 
         Returns:
-            variance: Variance of the predicted embeddings.
+            variance: Mean variance across all dimensions as a scalar.
         """
-        return torch.sqrt(pred_encs.var(dim=0))
+        B, T, D = pred_encs.shape
+        pred_encs_flat = pred_encs.view(-1, D)  # Flatten to [B*T, D]
+        variance = pred_encs_flat.var(dim=0, unbiased=False)  # Per-dimension variance [D]
+        return variance.mean()  # Scalar: mean variance across dimensions
+
     
 
     def compute_dimensional_covariance(self, pred_encs):
         """
-        Compute the covariance of the predicted embeddings across dimensions.
+        Compute the mean off-diagonal covariance of predicted embeddings.
 
         Args:
             pred_encs: Predicted embeddings of shape (B, T, D).
 
         Returns:
-            covariance: Mean covariance of off-diagonal elements.
+            covariance: Mean off-diagonal covariance as a scalar.
         """
         B, T, D = pred_encs.shape
-        # Flatten batch and timesteps: (B*T, D)
-        pred_encs_flat = pred_encs.view(-1, D)
+        pred_encs_flat = pred_encs.view(-1, D)  # Flatten to [B*T, D]
 
         # Compute mean for centering
         mean = pred_encs_flat.mean(dim=0, keepdim=True)  # Shape: (1, D)
@@ -256,13 +258,14 @@ class JEPA_Model(nn.Module):
         centered_encs = pred_encs_flat - mean
 
         # Compute covariance matrix
-        cov_matrix = torch.matmul(centered_encs.T, centered_encs) / (pred_encs_flat.size(0) - 1)
+        cov_matrix = torch.matmul(centered_encs.T, centered_encs) / (pred_encs_flat.size(0) - 1)  # [D, D]
 
         # Extract off-diagonal elements
-        off_diag_cov = cov_matrix - torch.diag(torch.diag(cov_matrix))
+        off_diag_cov = cov_matrix - torch.diag(torch.diag(cov_matrix))  # Zero out diagonal
 
-        # Return mean of off-diagonal elements as scalar
+        # Return mean of off-diagonal elements as a scalar
         return off_diag_cov.mean()
+
 
 
     
