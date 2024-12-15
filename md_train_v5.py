@@ -264,7 +264,7 @@ class Trainer:
                 if batch_idx % 100 == 0:
                     print(f"Epoch [{epoch}/{self.config['num_epochs']}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}")
                     self.save_model(model, f"{epoch}_batch_{batch_idx}")
-                    Perform validation
+                    #Perform validation
                     val_loss = self.validate_model(model, epoch, epoch_loss / (batch_idx + 1), optimizer)
                     wandb.log({"val_loss": val_loss})
 
