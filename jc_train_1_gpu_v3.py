@@ -75,11 +75,12 @@ class Trainer:
         model = JEPA_Model(device=self.device, repr_dim=256, action_dim=2, dropout_prob=0).to(self.device)
 
         optimizer = optim.Adam(model.parameters(), lr=self.config["learning_rate"], weight_decay=1e-4)
-        scheduler = get_cosine_schedule_with_warmup(optimizer, 
-                                                    num_warmup_steps=10, 
-                                                    num_training_steps=self.config["num_epochs"] * len(train_loader), 
-                                                    initial_lr=self.config["learning_rate"], 
-                                                    final_lr=1e-8)
+        # scheduler = get_cosine_schedule_with_warmup(optimizer, 
+        #                                             num_warmup_steps=10, 
+        #                                             num_training_steps=self.config["num_epochs"] * len(train_loader), 
+        #                                             initial_lr=self.config["learning_rate"], 
+        #                                             final_lr=1e-8)
+        scheduler = CosineAnnealingLR(optimizer, T_max=self.config["num_epochs"], eta_min=1e-7)
         # optimizer = torch.optim.SGD(model.parameters(), lr=self.config['learning_rate'], momentum=self.config['momentum'], weight_decay=1e-4)
         # scheduler = StepLR(optimizer, step_size=50, gamma=0.4)  # Reduce LR by 50% every 5 epochs
 
@@ -154,8 +155,8 @@ def main():
         "split_ratio": 1.0,
         "lambda_energy": 1.0,
         "lambda_var": 10.0,
-        "lambda_cov": 1.0,
-        'lambda_contrastive': 10.0,
+        "lambda_cov": 2.0,
+        'lambda_contrastive': 5.0,
         "max_grad_norm": 1.0,
         "min_variance": 1.0,
         "save_every": 1,
