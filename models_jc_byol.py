@@ -199,7 +199,7 @@ class JEPA_Model(nn.Module):
             raise ValueError(f"Unknown distance function: {distance_function}")
         return energy
     
-    def compute_loss(pred_encs, target_encs):
+    def compute_loss(self, pred_encs, target_encs):
         """
         Compute the JEPA energy loss without any additional regularization.
 
