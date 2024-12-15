@@ -1,13 +1,14 @@
-#byol_train_new_v2.py
+# byol_train_new_v2.py
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchvision.models import resnet18
-from torchvision.transforms import Compose, RandomResizedCrop, RandomHorizontalFlip, ColorJitter, GaussianBlur, ToTensor, Normalize
+from torchvision.models import resnet18, ResNet18_Weights
 from torch.utils.data import DataLoader, random_split
 from tqdm.auto import tqdm
 import os
+import torchvision.transforms.functional as F
+import numpy as np
 
 # Replace these imports with your actual modules
 from dataset_md import create_wall_dataloader  # Custom data loader
@@ -26,7 +27,10 @@ class BYOL(nn.Module):
         """
         super(BYOL, self).__init__()
         # Online network components
-        self.online_encoder = base_encoder(pretrained=False)
+        # Update to use 'weights=None' to avoid deprecation warnings
+        self.online_encoder = base_encoder(weights=None)
+        # Modify the first convolution layer to accept 2 channels instead of 3
+        self.online_encoder.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.online_encoder.fc = nn.Identity()  # Remove the classification head
         
         self.online_projector = nn.Sequential(
@@ -44,7 +48,8 @@ class BYOL(nn.Module):
         )
         
         # Target network components
-        self.target_encoder = base_encoder(pretrained=False)
+        self.target_encoder = base_encoder(weights=None)
+        self.target_encoder.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.target_encoder.fc = nn.Identity()  # Remove the classification head
         
         self.target_projector = nn.Sequential(
@@ -126,33 +131,81 @@ def update_target_network(online_net, target_net, momentum):
 
 # Data augmentation for BYOL
 class BYOLAugmentations:
-    def __init__(self, image_size=32):
+    def __init__(self, image_size=36):
         """
         BYOL augmentations comprising two different augmented views of the same image.
         
         Args:
             image_size (int): Desired image size after cropping.
         """
-        self.augment = Compose([
-            RandomResizedCrop(image_size, scale=(0.2, 1.0)),
-            RandomHorizontalFlip(),
-            ColorJitter(0.4, 0.4, 0.4, 0.1),
-            GaussianBlur(kernel_size=3),
-            ToTensor(),
-            Normalize((0.5,), (0.5,)),
-        ])
-    
+        self.image_size = image_size
+
     def __call__(self, x):
         """
         Apply augmentations to the input image.
         
         Args:
-            x (PIL Image or Tensor): Input image.
+            x (Tensor): Input tensor of shape [N, C, H, W].
         
         Returns:
             x_aug (Tensor): Augmented image tensor.
         """
-        return self.augment(x)
+        # x is a batch tensor: [N, C, H, W]
+        # Apply augmentation per image
+        augmented = []
+        for idx, img in enumerate(x):
+            # Debugging: Print image shape before any augmentation
+            print(f"Augmenting image {idx} - Original shape: {img.shape}")
+
+            # Clone the image to ensure it's writable
+            img = img.clone()
+
+            # Apply RandomResizedCrop
+            try:
+                i, j, h, w = RandomResizedCrop.get_params(img, scale=(0.2, 1.0), ratio=(3./4., 4./3.))
+                img = F.resized_crop(img, i, j, h, w, self.image_size, interpolation=F.InterpolationMode.BILINEAR)
+                print(f"Augmenting image {idx} - After RandomResizedCrop: {img.shape}")
+            except Exception as e:
+                print(f"Error in RandomResizedCrop for image {idx}: {e}")
+                raise e
+
+            # Apply RandomHorizontalFlip
+            if torch.rand(1).item() < 0.5:
+                img = F.hflip(img)
+                print(f"Augmenting image {idx} - After RandomHorizontalFlip: {img.shape}")
+            else:
+                print(f"Augmenting image {idx} - RandomHorizontalFlip skipped")
+
+            # Apply GaussianBlur
+            try:
+                img = F.gaussian_blur(img, kernel_size=3, sigma=(0.1, 2.0))
+                print(f"Augmenting image {idx} - After GaussianBlur: {img.shape}")
+            except Exception as e:
+                print(f"Error in GaussianBlur for image {idx}: {e}")
+                raise e
+
+            # Normalize
+            if img.shape[0] == 2:
+                mean = (0.5, 0.5)
+                std = (0.5, 0.5)
+            elif img.shape[0] == 1:
+                mean = (0.5,)
+                std = (0.5,)
+            else:
+                mean = (0.5, 0.5, 0.5)
+                std = (0.5, 0.5, 0.5)
+            try:
+                img = F.normalize(img, mean=mean, std=std)
+                print(f"Augmenting image {idx} - After Normalization: {img.shape}")
+            except Exception as e:
+                print(f"Error in normalization for image {idx}: {e}")
+                print(f"Image shape: {img.shape}, mean: {mean}, std: {std}")
+                raise e
+
+            augmented.append(img)
+        augmented = torch.stack(augmented).to(x.device)
+        print(f"Augmented batch shape: {augmented.shape}")
+        return augmented
 
 # Trainer class
 class Trainer:
@@ -180,11 +233,14 @@ class Trainer:
         for param in self.target_network.parameters():
             param.requires_grad = False
         
-        # Optimizer
+        # Optimizer: Update only the online predictor parameters
         self.optimizer = optim.Adam(self.online_network.online_predictor.parameters(), lr=self.config['learning_rate'])
         
         # Scheduler (optional)
         self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=self.config['epochs'])
+        
+        # Initialize augmentations
+        self.augmentations = self.config['augmentations']
         
     def load_data(self):
         """
@@ -320,12 +376,15 @@ class Trainer:
             print("Inspecting 'locations' tensor in training dataset:")
             # Inspect a sample from the probing training dataset
             if hasattr(self.probe_train_dataset, '__getitem__'):
-                sample = self.probe_train_dataset[0]
-                locations = getattr(sample, "locations", None)
-                if locations is not None and locations.numel() > 0:
-                    print(f"Probing Training sample 'locations' shape: {locations.shape}")
-                else:
-                    print("Probing Training sample does not have 'locations' attribute or it's empty.")
+                try:
+                    sample = self.probe_train_dataset[0]
+                    locations = getattr(sample, "locations", None)
+                    if locations is not None and locations.numel() > 0:
+                        print(f"Probing Training sample 'locations' shape: {locations.shape}")
+                    else:
+                        print("Probing Training sample does not have 'locations' attribute or it's empty.")
+                except Exception as ex:
+                    print(f"Error accessing first sample in probe_train_dataset: {ex}")
             print("Inspecting 'locations' tensors in validation datasets:")
             for key, val_ds in self.val_loader.items():
                 if hasattr(val_ds, '__iter__'):
@@ -364,7 +423,7 @@ class Trainer:
 
         # Append losses to a text file for record-keeping
         with open(f"losses_model_{self.config['model_version']}.txt", "a") as f:
-            print(f"Writing file: {f}")
+            print(f"Writing to file: losses_model_{self.config['model_version']}.txt")
             f.write(f"Epoch {epoch}: train_loss={avg_epoch_loss}, val_loss_normal={val_loss_normal}, val_loss_wall={val_loss_wall}, probing_lr={current_probe_lr}\n")
 
     def train(self):
@@ -375,15 +434,12 @@ class Trainer:
         online_net = self.online_network
         target_net = self.target_network
 
-        # Initialize data augmentations
-        augmentations = self.config['augmentations']
-
         # Training loop
         for epoch in range(1, self.config["epochs"] + 1):
             online_net.train()
             total_loss = 0.0
             progress_bar = tqdm(self.train_loader, desc=f"Epoch {epoch}/{self.config['epochs']}")
-            
+
             for batch_idx, batch in enumerate(progress_bar):
                 # Assuming batch has 'states' and 'actions' attributes
                 # Use 'states' as images
@@ -391,45 +447,57 @@ class Trainer:
                 if x is None:
                     print("Batch does not have 'states' attribute. Skipping this batch.")
                     continue
+
+                # Fix non-writable tensor warning by making a writable copy
+                if not x.is_contiguous():
+                    x = x.contiguous()
+                # Ensure x is writable
+                if not x.requires_grad:
+                    x = x.clone()
                 x = x.to(self.device)
-                
+
                 # Apply two separate augmentations
-                x1 = augmentations(x)
-                x2 = augmentations(x)
-                
+                try:
+                    print(f"Batch {batch_idx} - Applying augmentations to the batch.")
+                    x1 = self.augmentations(x)
+                    x2 = self.augmentations(x)
+                except Exception as e:
+                    print(f"Error during augmentation: {e}")
+                    continue
+
                 # Forward pass through online network
                 z1_online, p1 = online_net.forward_online(x1)
                 z2_online, p2 = online_net.forward_online(x2)
-                
+
                 # Forward pass through target network
                 with torch.no_grad():
                     z1_target = target_net.forward_target(x1)
                     z2_target = target_net.forward_target(x2)
-                
+
                 # Compute loss
                 loss = cosine_similarity_loss(p1, z2_target) + cosine_similarity_loss(p2, z1_target)
-                
+
                 # Backpropagation
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-                
+
                 # Update target network with momentum
                 update_target_network(online_net, target_net, self.config['momentum'])
-                
+
                 total_loss += loss.item()
-                
+
                 # Update progress bar
                 progress_bar.set_postfix({"loss": loss.item()})
-            
+
             avg_train_loss = total_loss / len(self.train_loader)
-            
+
             # Validation
             self.validate_model(online_net, epoch, avg_train_loss, self.optimizer)
-            
+
             # Step the scheduler
             self.scheduler.step()
-            
+
             # Save model checkpoint after each epoch
             checkpoint_path = os.path.join(self.config["save_dir"], f"byol_new_v2_epoch_{epoch}.pth")
             torch.save({
@@ -461,6 +529,17 @@ class Trainer:
 
 # Main function
 def main():
+    import wandb
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    WANDB_API_KEY = os.getenv("WANDB_API_KEY")
+    if WANDB_API_KEY:
+        os.environ["WANDB_API_KEY"] = WANDB_API_KEY
+        wandb.login(key=WANDB_API_KEY)
+    else:
+        print("WANDB_API_KEY not found. Proceeding without W&B logging.")
+
     # Configuration dictionary
     config = {
         "batch_size": 128,
@@ -478,9 +557,17 @@ def main():
     }
 
     # Initialize data augmentations
-    config['augmentations'] = BYOLAugmentations(image_size=32)  # Adjust image_size based on your dataset
+    config['augmentations'] = BYOLAugmentations(image_size=36)  # Adjust image_size based on your dataset
+
+    # Ensure the save directory exists
+    os.makedirs(config["save_dir"], exist_ok=True)
 
     # Initialize and start training
+    wandb.init(
+        project=f"BYOL_Project_{config['model_version']}",
+        config=config
+    )
+
     trainer = Trainer(config)
     trainer.train()
 
