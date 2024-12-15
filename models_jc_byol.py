@@ -234,18 +234,31 @@ class JEPA_Model(nn.Module):
         """
         return torch.sqrt(pred_encs.var(dim=0))
     
+
     def compute_dimensional_covariance(self, pred_encs):
         """
         Compute the covariance of the predicted embeddings.
 
         Args:
             pred_encs: Predicted embeddings (B, T, D).
-            target_encs: Target embeddings (B, T, D).
 
         Returns:
-            covariance: Covariance of the predicted embeddings.
+            covariance: Mean covariance of the predicted embeddings across dimensions.
         """
-        return torch.matmul(pred_encs.T, pred_encs) / (pred_encs.size(0) - 1) 
+    # Reshape to [B*T, D] for feature-wise covariance
+        B, T, D = pred_encs.shape
+        pred_encs_flat = pred_encs.view(-1, D)
+
+        # Center the embeddings (zero mean)
+        pred_encs_centered = pred_encs_flat - pred_encs_flat.mean(dim=0, keepdim=True)
+
+        # Compute covariance matrix
+        cov_matrix = torch.matmul(pred_encs_centered.T, pred_encs_centered) / (pred_encs_flat.size(0) - 1)
+
+        # Return off-diagonal covariance (mean of non-diagonal elements)
+        off_diag_cov = cov_matrix - torch.diag(torch.diag(cov_matrix))  # Zero out diagonal
+        return off_diag_cov.mean()
+
     
     
 
