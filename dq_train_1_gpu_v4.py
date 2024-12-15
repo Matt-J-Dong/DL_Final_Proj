@@ -25,6 +25,27 @@ class Trainer:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.config = config
         print(f"Using device: {self.device}")
+    
+    def load_data(self):
+        data_path = "/scratch/DL24FA"
+
+        full_loader = create_wall_dataloader(
+            data_path=f"{data_path}/train",
+            probing=False,
+            device=self.device,
+            train=True,
+            batch_size=self.config["batch_size"],
+        )
+
+        full_dataset = full_loader.dataset
+        train_size = int(self.config["split_ratio"] * len(full_dataset))
+
+        train_loader = DataLoader(full_dataset, batch_size=self.config["batch_size"], shuffle=True)
+
+        # validation datasets
+        val_train_ds, val_val_ds = load_validation_data(self.device)
+
+        return train_loader, val_train_ds, val_val_ds
 
     def train(self):
         train_loader, val_train_ds, val_val_ds = self.load_data()
