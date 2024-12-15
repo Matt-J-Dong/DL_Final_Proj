@@ -243,6 +243,7 @@ class JEPA_Model(nn.Module):
         return cov_loss
 
 
+
     def compute_energy(self, predicted_encs, target_encs, distance_function="l2"):
         """
         Compute the energy function.
@@ -471,7 +472,8 @@ class Prober(torch.nn.Module):
         if not all(isinstance(x, int) for x in output_shape):
             raise TypeError("Prober __init__: All elements in output_shape must be integers.")
         
-        self.output_dim = np.prod(output_shape)
+        self.output_dim = int(np.prod(output_shape))  # Ensure output_dim is integer
+        print(f"Prober __init__: Calculated output_dim={self.output_dim}")
         self.output_shape = output_shape
         self.arch = arch
 
