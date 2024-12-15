@@ -11,12 +11,15 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR
 import wandb
 from dotenv import load_dotenv
 from evaluator_md import ProbingEvaluator, ProbingConfig
+import torch.multiprocessing as mp
 
 model_version = "v4"
 
+mp.set_start_method('spawn', force=True)  # Set start method to 'spawn'
+
 def main():
-    import torch.multiprocessing as mp
-    mp.set_start_method('spawn', force=True)  # Set start method to 'spawn'
+    
+    
 
     from dataset_md import create_wall_dataloader  # Import after setting start method
 
