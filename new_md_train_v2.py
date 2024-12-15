@@ -24,7 +24,10 @@ path_data = "./data/DL24FA"
 load_dotenv()
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")
 os.environ["WANDB_API_KEY"] = WANDB_API_KEY
-wandb.login(key=WANDB_API_KEY)
+if WANDB_API_KEY:
+    wandb.login(key=WANDB_API_KEY)
+else:
+    print("WANDB_API_KEY not found. Proceeding without W&B logging.")
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
@@ -473,6 +476,16 @@ class Trainer:
                 # Debugging: Print the shape of 'states'
                 print(f"\nBatch {batch_idx} 'states' shape: {x.shape}")
 
+                # Reshape x from [batch_size, seq_length, C, H, W] to [batch_size * seq_length, C, H, W]
+                try:
+                    batch_size, seq_length, C, H, W = x.shape
+                    print(f"Reshaping x from [{batch_size}, {seq_length}, {C}, {H}, {W}] to [{batch_size * seq_length}, {C}, {H}, {W}]")
+                    x = x.view(batch_size * seq_length, C, H, W)
+                    print(f"Reshaped x shape: {x.shape}")
+                except Exception as e:
+                    print(f"Error reshaping 'states' tensor: {e}")
+                    continue
+
                 # Fix non-writable tensor warning by making a writable copy
                 if not x.is_contiguous():
                     x = x.contiguous()
@@ -568,13 +581,13 @@ def main():
 
     # Configuration dictionary
     config = {
-        "batch_size": 128,
-        "epochs": 100,
-        "learning_rate": 1e-3,
+        "batch_size": 512,
+        "epochs": 10,
+        "learning_rate": 1e-4,
         "projection_dim": 128,
         "hidden_dim": 4096,
         "momentum": 0.996,
-        "split_ratio": 0.9,  # Adjusted based on your dataset split needs
+        "split_ratio": 1.0,  # Adjusted based on your dataset split needs
         "model_version": "new_v2",
         "save_dir": "./checkpoints_new_v2",
         "probe_lr": 0.0002,
