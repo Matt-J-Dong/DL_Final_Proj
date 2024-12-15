@@ -131,7 +131,7 @@ class Trainer:
 
 
 # Define the learning rate scheduler with warmup and cosine decay
-def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, num_cycles=0.5, last_epoch=-1, initial_lr=1e-3, final_lr=1e-5):
+def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, num_cycles=0.5, last_epoch=-1, initial_lr=1e-3, final_lr=1e-4):
     def lr_lambda(current_step):
         if current_step < num_warmup_steps:
             lr = initial_lr * float(current_step) / float(max(1, num_warmup_steps))
