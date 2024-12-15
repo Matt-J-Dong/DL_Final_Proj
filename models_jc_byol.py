@@ -237,27 +237,33 @@ class JEPA_Model(nn.Module):
 
     def compute_dimensional_covariance(self, pred_encs):
         """
-        Compute the covariance of the predicted embeddings.
+        Compute the covariance of the predicted embeddings across dimensions.
 
         Args:
-            pred_encs: Predicted embeddings (B, T, D).
+            pred_encs: Predicted embeddings of shape (B, T, D).
 
         Returns:
-            covariance: Mean covariance of the predicted embeddings across dimensions.
+            covariance: Mean covariance of off-diagonal elements.
         """
-    # Reshape to [B*T, D] for feature-wise covariance
         B, T, D = pred_encs.shape
+        # Flatten batch and timesteps: (B*T, D)
         pred_encs_flat = pred_encs.view(-1, D)
 
-        # Center the embeddings (zero mean)
-        pred_encs_centered = pred_encs_flat - pred_encs_flat.mean(dim=0, keepdim=True)
+        # Compute mean for centering
+        mean = pred_encs_flat.mean(dim=0, keepdim=True)  # Shape: (1, D)
+
+        # Center embeddings
+        centered_encs = pred_encs_flat - mean
 
         # Compute covariance matrix
-        cov_matrix = torch.matmul(pred_encs_centered.T, pred_encs_centered) / (pred_encs_flat.size(0) - 1)
+        cov_matrix = torch.matmul(centered_encs.T, centered_encs) / (pred_encs_flat.size(0) - 1)
 
-        # Return off-diagonal covariance (mean of non-diagonal elements)
-        off_diag_cov = cov_matrix - torch.diag(torch.diag(cov_matrix))  # Zero out diagonal
+        # Extract off-diagonal elements
+        off_diag_cov = cov_matrix - torch.diag(torch.diag(cov_matrix))
+
+        # Return mean of off-diagonal elements as scalar
         return off_diag_cov.mean()
+
 
     
     
@@ -300,9 +306,9 @@ class JEPA_Model(nn.Module):
                                 target_encs,)
         
         if debug:
-            energy = self.compute_energy(pred_encs, target_encs, distance_function)
-            variance = self.compute_variance(pred_encs)
-            covariance = self.compute_dimensional_covariance(pred_encs)
+            energy = loss.detach()  # Just reuse loss as a rough energy metric
+            variance = self.compute_variance(pred_encs) # Quick variance calculation
+            covariance = self.compute_dimensional_covariance(pred_encs).detach()  # Quick covariance calculation
 
         # Backpropagation
         optimizer.zero_grad()
