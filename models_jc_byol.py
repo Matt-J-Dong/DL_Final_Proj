@@ -27,34 +27,25 @@ class Encoder(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         # Residual block 1
-        self.res_block1 = self._make_residual_block(64, 64, stride=1, dropout_prob=dropout_prob)
+        self.res_block1_conv1 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.res_block1_bn1 = nn.BatchNorm2d(64)
+        self.res_block1_conv2 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.res_block1_bn2 = nn.BatchNorm2d(64)
 
         # Residual block 2
-        self.res_block2 = self._make_residual_block(64, 128, stride=2, dropout_prob=dropout_prob)
+        self.res_block2_conv1 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1, bias=False)
+        self.res_block2_bn1 = nn.BatchNorm2d(128)
+        self.res_block2_conv2 = nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=False)
+        self.res_block2_bn2 = nn.BatchNorm2d(128)
+        self.res_block2_downsample = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=1, stride=2, bias=False),
+            nn.BatchNorm2d(128)
+        )
+
+        self.dropout = nn.Dropout(p=dropout_prob)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(128, output_dim)
-
-    def _make_residual_block(self, in_channels, out_channels, stride, dropout_prob):
-        """
-        Create a residual block with optional downsampling and dropout.
-        """
-        downsample = None
-        if stride != 1 or in_channels != out_channels:
-            downsample = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(out_channels)
-            )
-        return nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-            nn.Dropout(p=dropout_prob),  # Add dropout after the first activation
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.Dropout(p=dropout_prob),  # Add dropout after the second batch norm
-            DownsampleShortcut(downsample)
-        )
 
     def forward(self, x):
         # Initial convolution and pooling
@@ -64,30 +55,32 @@ class Encoder(nn.Module):
         x = self.maxpool(x)
 
         # Residual block 1
-        x = self.res_block1(x)
+        identity = x
+        out = self.res_block1_conv1(x)
+        out = self.res_block1_bn1(out)
+        out = self.relu(out)
+        out = self.dropout(out)
+        out = self.res_block1_conv2(out)
+        out = self.res_block1_bn2(out)
+        out += identity  # Residual connection
+        x = self.relu(out)
 
         # Residual block 2
-        x = self.res_block2(x)
+        identity = self.res_block2_downsample(x)  # Downsample identity
+        out = self.res_block2_conv1(x)
+        out = self.res_block2_bn1(out)
+        out = self.relu(out)
+        out = self.dropout(out)
+        out = self.res_block2_conv2(out)
+        out = self.res_block2_bn2(out)
+        out += identity  # Residual connection
+        x = self.relu(out)
 
         # Global average pooling and projection
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
         return x
-
-
-class DownsampleShortcut(nn.Module):
-    """
-    Applies the shortcut connection with optional downsampling.
-    """
-    def __init__(self, downsample):
-        super(DownsampleShortcut, self).__init__()
-        self.downsample = downsample
-
-    def forward(self, x, identity):
-        if self.downsample is not None:
-            identity = self.downsample(identity)
-        return x + identity
 
 
 
