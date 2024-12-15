@@ -4,16 +4,18 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchvision.models import resnet18
-from torchvision.transforms import Compose, RandomResizedCrop, RandomHorizontalFlip, GaussianBlur, Normalize
+from torchvision.transforms import Compose, RandomResizedCrop, RandomHorizontalFlip, GaussianBlur, Normalize, Resize
 from torch.utils.data import DataLoader, random_split
 from tqdm.auto import tqdm
 import os
 import torchvision.transforms.functional as F
 import numpy as np
 
-# Replace these imports with your actual modules
 from dataset_md import create_wall_dataloader  # Custom data loader
 from evaluator_md import ProbingEvaluator, ProbingConfig  # Custom evaluator
+
+import wandb
+from dotenv import load_dotenv
 
 model_version = "v2"
 model_size = 64
@@ -22,7 +24,10 @@ path_data = "./data/DL24FA"
 load_dotenv()
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")
 os.environ["WANDB_API_KEY"] = WANDB_API_KEY
-wandb.login(key=WANDB_API_KEY)
+if WANDB_API_KEY:
+    wandb.login(key=WANDB_API_KEY)
+else:
+    print("WANDB_API_KEY not found. Proceeding without W&B logging.")
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
@@ -145,12 +150,12 @@ def update_target_network(online_net, target_net, momentum):
 
 # Data augmentation for BYOL
 class BYOLAugmentations:
-    def __init__(self, image_size=36):
+    def __init__(self, image_size=(36, 36)):
         """
         BYOL augmentations comprising two different augmented views of the same image.
         
         Args:
-            image_size (int): Desired image size after cropping.
+            image_size (tuple): Desired image size after cropping (height, width).
         """
         self.image_size = image_size
 
@@ -164,20 +169,30 @@ class BYOLAugmentations:
         Returns:
             x_aug (Tensor): Augmented image tensor.
         """
+        # Debugging: Print the shape of the input batch
+        print(f"Augmentations input x shape: {x.shape}")
+
         # x is a batch tensor: [N, C, H, W]
         # Apply augmentation per image
         augmented = []
         for idx, img in enumerate(x):
-            # Debugging: Print image shape
-            # print(f"Augmenting image {idx} with shape: {img.shape}")  # Uncomment for debugging
-
+            print(f"\n--- Augmenting image {idx} ---")
+            print(f"Original image shape: {img.shape}")
+            
+            # Check if img has 3 dimensions [C, H, W]
+            if img.dim() != 3:
+                print(f"Unexpected image dimensions: {img.dim()} (expected 3)")
+                raise ValueError(f"Each image should have 3 dimensions [C, H, W], but got {img.dim()} dimensions.")
+            
+            # Apply augmentation steps
             # Ensure the tensor is writable by making a copy
             img = img.clone()
-
+            
             # Apply RandomResizedCrop
             try:
                 i, j, h, w = RandomResizedCrop.get_params(img, scale=(0.2, 1.0), ratio=(3./4., 4./3.))
                 img = F.resized_crop(img, i, j, h, w, self.image_size, interpolation=F.InterpolationMode.BILINEAR)
+                print(f"After RandomResizedCrop: {img.shape}")
             except Exception as e:
                 print(f"Error in RandomResizedCrop for image {idx}: {e}")
                 raise e
@@ -185,22 +200,32 @@ class BYOLAugmentations:
             # Apply RandomHorizontalFlip
             if torch.rand(1).item() < 0.5:
                 img = F.hflip(img)
+                print("Applied RandomHorizontalFlip")
 
             # Apply GaussianBlur
-            img = F.gaussian_blur(img, kernel_size=3, sigma=(0.1, 2.0))
+            try:
+                img = F.gaussian_blur(img, kernel_size=3, sigma=(0.1, 2.0))
+                print(f"After GaussianBlur: {img.shape}")
+            except Exception as e:
+                print(f"Error in GaussianBlur for image {idx}: {e}")
+                raise e
 
             # Normalize
-            if img.shape[0] == 2:
+            channels = img.shape[0]
+            print(f"Image channels: {channels}")
+            if channels == 2:
                 mean = (0.5, 0.5)
                 std = (0.5, 0.5)
-            elif img.shape[0] == 1:
+            elif channels == 1:
                 mean = (0.5,)
                 std = (0.5,)
             else:
                 mean = (0.5, 0.5, 0.5)
                 std = (0.5, 0.5, 0.5)
+            print(f"Normalization mean: {mean}, std: {std}")
             try:
                 img = F.normalize(img, mean=mean, std=std)
+                print(f"After Normalize: {img.shape}")
             except Exception as e:
                 print(f"Error in normalization for image {idx}: {e}")
                 print(f"Image shape: {img.shape}, mean: {mean}, std: {std}")
@@ -208,6 +233,7 @@ class BYOLAugmentations:
 
             augmented.append(img)
         augmented = torch.stack(augmented).to(x.device)
+        print(f"Augmented batch shape: {augmented.shape}")
         return augmented
 
 # Trainer class
@@ -315,7 +341,7 @@ class Trainer:
                 if locations is not None and locations.numel() > 0:
                     print(f"{name} 'locations' shape: {locations.shape}")
                 else:
-                    print(f"{name} does not have 'locations' attribute or it's empty.")
+                    print(f"{name} does not have 'locations' attribute or it's empty. This means the shape is [{self.config['batch_size']},0].")
             except Exception as e:
                 print(f"Error inspecting {name} DataLoader: {e}")
 
@@ -379,12 +405,15 @@ class Trainer:
             print("Inspecting 'locations' tensor in training dataset:")
             # Inspect a sample from the probing training dataset
             if hasattr(self.probe_train_dataset, '__getitem__'):
-                sample = self.probe_train_dataset[0]
-                locations = getattr(sample, "locations", None)
-                if locations is not None and locations.numel() > 0:
-                    print(f"Probing Training sample 'locations' shape: {locations.shape}")
-                else:
-                    print("Probing Training sample does not have 'locations' attribute or it's empty.")
+                try:
+                    sample = self.probe_train_dataset[0]
+                    locations = getattr(sample, "locations", None)
+                    if locations is not None and locations.numel() > 0:
+                        print(f"Probing Training sample 'locations' shape: {locations.shape}")
+                    else:
+                        print("Probing Training sample does not have 'locations' attribute or it's empty.")
+                except Exception as ex:
+                    print(f"Error accessing first sample in probing training dataset: {ex}")
             print("Inspecting 'locations' tensors in validation datasets:")
             for key, val_ds in self.val_loader.items():
                 if hasattr(val_ds, '__iter__'):
@@ -423,7 +452,7 @@ class Trainer:
 
         # Append losses to a text file for record-keeping
         with open(f"losses_model_{self.config['model_version']}.txt", "a") as f:
-            print(f"Writing file: {f}")
+            print(f"Writing to file: losses_model_{self.config['model_version']}.txt")
             f.write(f"Epoch {epoch}: train_loss={avg_epoch_loss}, val_loss_normal={val_loss_normal}, val_loss_wall={val_loss_wall}, probing_lr={current_probe_lr}\n")
 
     def train(self):
@@ -447,6 +476,20 @@ class Trainer:
                 if x is None:
                     print("Batch does not have 'states' attribute. Skipping this batch.")
                     continue
+
+                # Debugging: Print the shape of 'states'
+                print(f"\nBatch {batch_idx} 'states' shape: {x.shape}")
+
+                # Reshape x from [batch_size, seq_length, C, H, W] to [batch_size * seq_length, C, H, W]
+                try:
+                    batch_size, seq_length, C, H, W = x.shape
+                    print(f"Reshaping x from [{batch_size}, {seq_length}, {C}, {H}, {W}] to [{batch_size * seq_length}, {C}, {H}, {W}]")
+                    x = x.view(batch_size * seq_length, C, H, W)
+                    print(f"Reshaped x shape: {x.shape}")
+                except Exception as e:
+                    print(f"Error reshaping 'states' tensor: {e}")
+                    continue
+
                 # Fix non-writable tensor warning by making a writable copy
                 if not x.is_contiguous():
                     x = x.contiguous()
@@ -489,6 +532,7 @@ class Trainer:
                 progress_bar.set_postfix({"loss": loss.item()})
 
             avg_train_loss = total_loss / len(self.train_loader)
+            print(f"\nEpoch {epoch} Average Training Loss: {avg_train_loss:.4f}")
 
             # Validation
             self.validate_model(online_net, epoch, avg_train_loss, self.optimizer)
@@ -497,6 +541,7 @@ class Trainer:
             self.scheduler.step()
 
             # Save model checkpoint after each epoch
+            os.makedirs(self.config["save_dir"], exist_ok=True)  # Ensure save directory exists
             checkpoint_path = os.path.join(self.config["save_dir"], f"byol_new_v2_epoch_{epoch}.pth")
             torch.save({
                 'epoch': epoch,
@@ -540,13 +585,13 @@ def main():
 
     # Configuration dictionary
     config = {
-        "batch_size": 128,
-        "epochs": 100,
-        "learning_rate": 1e-3,
+        "batch_size": 512,
+        "epochs": 10,
+        "learning_rate": 1e-4,
         "projection_dim": 128,
         "hidden_dim": 4096,
         "momentum": 0.996,
-        "split_ratio": 0.9,  # Adjusted based on your dataset split needs
+        "split_ratio": 1.0,  # Adjusted based on your dataset split needs
         "model_version": "new_v2",
         "save_dir": "./checkpoints_new_v2",
         "probe_lr": 0.0002,
@@ -555,7 +600,7 @@ def main():
     }
 
     # Initialize data augmentations
-    config['augmentations'] = BYOLAugmentations(image_size=36)  # Adjust image_size based on your dataset
+    config['augmentations'] = BYOLAugmentations(image_size=(36, 36))  # Fixed image size
 
     # Initialize and start training
     wandb.init(
