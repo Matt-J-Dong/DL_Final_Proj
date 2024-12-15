@@ -12,6 +12,7 @@ import wandb
 from dotenv import load_dotenv
 from evaluator_md import ProbingEvaluator, ProbingConfig
 import torch.multiprocessing as mp
+from dataset_md import create_wall_dataloader  # Import after setting start method
 
 model_version = "v4"
 
@@ -21,7 +22,7 @@ def main():
     
     
 
-    from dataset_md import create_wall_dataloader  # Import after setting start method
+    
 
     load_dotenv()
     WANDB_API_KEY = os.getenv("WANDB_API_KEY")
