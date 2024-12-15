@@ -12,7 +12,8 @@ srun --account=csci_ga_2572-2024fa --partition=c12m85-a100-1 --gres=gpu:a100:1 -
 
 Version v2 is an LSTM encoder.
 Version v3 is a 1/2 size version of v2
-
+Version v4 is some regularization testing.
+Version v5 is adding back in validation.
 
 again: normal loss: 259.8260803222656
 wall loss: 187.7458038330078
@@ -22,3 +23,7 @@ wall loss: 186.7103271484375
 
 v2: normal loss: 249.39834594726562
 wall loss: 207.0797576904297
+
+v3: normal loss: 253.91708374023438
+wall loss: 205.20118713378906
+

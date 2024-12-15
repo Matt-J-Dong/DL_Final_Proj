@@ -1,4 +1,4 @@
-#md_train_v3.py
+# md_train_v5.py
 
 import torch
 import torch.nn as nn
@@ -7,14 +7,15 @@ from tqdm.auto import tqdm
 import os
 from torch.utils.data import random_split, DataLoader
 from dataset_md import create_wall_dataloader
-from models_md_v3 import JEPA_Model
+from models_md_v5 import JEPA_Model
 from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR
 import wandb
 from dotenv import load_dotenv
 from evaluator_md import ProbingEvaluator, ProbingConfig
+import torch.multiprocessing as mp
 
-model_version = "v3"
-model_size = 128
+model_version = "v5"
+model_size = 128  # Updated to match repr_dim in the checkpoint
 
 load_dotenv()
 WANDB_API_KEY = os.getenv("WANDB_API_KEY")
@@ -25,6 +26,8 @@ if torch.cuda.is_available():
     device = torch.device('cuda')
 else:
     device = torch.device('cpu')
+
+#mp.set_start_method('spawn', force=True)
 
 class Trainer:
     def __init__(self, config):
@@ -92,10 +95,10 @@ class Trainer:
             try:
                 batch = next(iter(dataloader))
                 locations = getattr(batch, "locations", None)
-                if locations is not None:
+                if locations is not None and locations.numel() > 0:
                     print(f"{name} 'locations' shape: {locations.shape}")
                 else:
-                    print(f"{name} does not have 'locations' attribute.")
+                    print(f"{name} does not have 'locations' attribute or it's empty.")
             except Exception as e:
                 print(f"Error inspecting {name} DataLoader: {e}")
 
@@ -160,20 +163,20 @@ class Trainer:
             if hasattr(self.probe_train_dataset, '__getitem__'):
                 sample = self.probe_train_dataset[0]
                 locations = getattr(sample, "locations", None)
-                if locations is not None:
+                if locations is not None and locations.numel() > 0:
                     print(f"Probing Training sample 'locations' shape: {locations.shape}")
                 else:
-                    print("Probing Training sample does not have 'locations' attribute.")
+                    print("Probing Training sample does not have 'locations' attribute or it's empty.")
             print("Inspecting 'locations' tensors in validation datasets:")
             for key, val_ds in self.val_loader.items():
                 if hasattr(val_ds, '__iter__'):
                     try:
                         val_sample = next(iter(val_ds))
                         locations = getattr(val_sample, "locations", None)
-                        if locations is not None:
+                        if locations is not None and locations.numel() > 0:
                             print(f"Validation '{key}' sample 'locations' shape: {locations.shape}")
                         else:
-                            print(f"Validation '{key}' sample does not have 'locations' attribute.")
+                            print(f"Validation '{key}' sample does not have 'locations' attribute or it's empty.")
                     except Exception as ex:
                         print(f"Error accessing validation '{key}' dataset: {ex}")
             raise e  # Re-raise the exception after debugging
@@ -207,7 +210,15 @@ class Trainer:
 
     def train(self):
         train_loader, val_loader = self.load_data()
-        model = JEPA_Model(device=self.device, repr_dim=model_size, action_dim=2, dropout_prob=self.config.get("dropout_prob", 0)).to(self.device)
+        model = JEPA_Model(
+            device=self.device, 
+            repr_dim=model_size,  # Set to 128 to match the updated repr_dim
+            action_dim=2, 
+            dropout_prob=self.config.get("dropout_prob", 0),
+            margin=self.config.get("margin", 1.0)  # Pass margin to the model
+        ).to(self.device)
+
+        print(f"Initialized JEPA_Model with repr_dim={model.repr_dim}")
 
         optimizer = optim.Adam(model.parameters(), lr=self.config["learning_rate"], weight_decay=1e-4)
         scheduler = CyclicLR(
@@ -231,7 +242,7 @@ class Trainer:
             for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
                 states, actions = batch.states.to(self.device), batch.actions.to(self.device)
 
-                loss, e_loss, var_loss, cov_loss, contra_loss = model.train_step(
+                loss, e_loss, var_loss, cov_loss, contra_loss, neg_loss = model.train_step(
                     states=states,
                     actions=actions,
                     optimizer=optimizer,
@@ -248,6 +259,7 @@ class Trainer:
                         "variance_loss": var_loss, 
                         "covariance_loss": cov_loss,
                         "contrastive_loss": contra_loss,
+                        "negative_loss": neg_loss,
                         'lr': optimizer.param_groups[0]['lr']
                     })
 
@@ -255,8 +267,8 @@ class Trainer:
                     print(f"Epoch [{epoch}/{self.config['num_epochs']}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}")
                     self.save_model(model, f"{epoch}_batch_{batch_idx}")
                     # Perform validation
-                    #val_loss = self.validate_model(model, epoch, epoch_loss / (batch_idx + 1), optimizer)
-                    #wandb.log({"val_loss": val_loss})
+                    val_loss = self.validate_model(model, epoch, epoch_loss / (batch_idx + 1), optimizer)
+                    wandb.log({"val_loss": val_loss})
 
             avg_epoch_loss = epoch_loss / len(train_loader)
             print(f"Epoch [{epoch}/{self.config['num_epochs']}] Average Loss: {avg_epoch_loss:.4f}")
@@ -266,11 +278,12 @@ class Trainer:
 
             if epoch % self.config["save_every"] == 0:
                 self.save_model(model, epoch)
-                #val_loss = self.validate_model(model, epoch, avg_epoch_loss, optimizer)
-                #wandb.log({"val_loss": val_loss})
+                val_loss = self.validate_model(model, epoch, avg_epoch_loss, optimizer)
+                wandb.log({"val_loss": val_loss})
 
         print("Training completed.")
         self.save_model(model, "final")
+
 
 def main():
     config = {
@@ -281,16 +294,17 @@ def main():
         "momentum": 0.996,
         "split_ratio": 1.0,
         "lambda_energy": 1.0,
-        "lambda_var": 0.0,
-        "lambda_cov": 0.0,
+        "lambda_var": 1.0,          # Increased from 0.0 to 1.0 for regularization
+        "lambda_cov": 1.0,          # Increased from 0.0 to 1.0 for regularization
         "max_grad_norm": 1.0,
-        "min_variance": 0.1,
+        "min_variance": 1.0,
         "save_every": 1,
-        'margin': 0.5,
-        'lambda_contrastive': 0.0,
+        'margin': 1.0,              # Added margin for contrastive loss
+        'lambda_contrastive': 0.1,  # Increased from 0.0 to 0.1 to enable contrastive loss
+        'lambda_negative': 0.5,     # Added lambda_negative for negative sampling loss
         'distance_function': 'l2',
-        "probe_lr": 0.0002,            # Added probe_lr with default value
-        "dropout_prob": 0.0             # Added dropout_prob with default value
+        "probe_lr": 0.0002,         # Added probe_lr with default value
+        "dropout_prob": 0.0         # Added dropout_prob with default value
     }
 
     wandb.init(
@@ -300,6 +314,7 @@ def main():
 
     trainer = Trainer(config)
     trainer.train()
+
 
 if __name__ == "__main__":
     main()

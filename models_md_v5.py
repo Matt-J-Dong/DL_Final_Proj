@@ -1,4 +1,4 @@
-# models_md_v3.py
+# models_md_v5.py
 
 from typing import List
 import torch
@@ -144,6 +144,7 @@ class JEPA_Model(nn.Module):
         for param in self.target_encoder.parameters():
             param.requires_grad = False
 
+
     def forward(self, init_state, actions):
         """
         Args:
@@ -171,6 +172,7 @@ class JEPA_Model(nn.Module):
 
         pred_encs = torch.stack(pred_encs, dim=1)
         return pred_encs
+
 
     def variance_regularization(self, pred_encs, target_encs, epsilon=1e-4, min_variance=1.0):
         # Ensure consistent 3D shape [B, T, D]
@@ -201,6 +203,7 @@ class JEPA_Model(nn.Module):
         variance_loss = pred_variance_loss + target_variance_loss
         
         return variance_loss
+
 
     def covariance_regularization(self, pred_encs, target_encs, epsilon=1e-4):
         def off_diagonal(matrix):
@@ -238,6 +241,8 @@ class JEPA_Model(nn.Module):
         # Combine covariance loss for both predicted and target embeddings
         cov_loss = off_diag_pred + off_diag_target
         return cov_loss
+
+
 
     def compute_energy(self, predicted_encs, target_encs, distance_function="l2"):
         """
@@ -351,6 +356,7 @@ class JEPA_Model(nn.Module):
 
         return loss.item(), energy.item(), var.item(), cov.item(), contrastive.item(), negative.item()
 
+
     def contrastive_loss(self, pred_encs, target_encs, margin=1.0):
         """
         Compute contrastive loss for embeddings.
@@ -381,6 +387,7 @@ class JEPA_Model(nn.Module):
         loss = torch.mean(torch.relu(margin - positive_pairs + closest_negative_pairs))
         return loss
 
+
     def compute_loss(self, 
                  pred_encs, 
                  target_encs, 
@@ -390,8 +397,8 @@ class JEPA_Model(nn.Module):
                  lambda_var=1.0, 
                  lambda_cov=1.0, 
                  lambda_contrastive=0.1, 
-                 lambda_negative=0.5,
-                 margin=1.0,
+                 lambda_negative=0.5,  # Weight for negative sampling loss
+                 margin=1.0,           # Margin for contrastive loss
                  debug=False, 
                  min_variance=1.0,
                  *args, **kwargs):
@@ -424,13 +431,13 @@ class JEPA_Model(nn.Module):
 
         # Add regularization terms
         var = lambda_var * self.variance_regularization(pred_encs, target_encs, min_variance=min_variance)
-        cov = lambda_cov * self.covariance_regularization(pred_encs, target_encs)
+        cov = lambda_cov * self.covariance_regularization(pred_encs, target_encs,)
 
         # Compute contrastive loss
         contrastive = lambda_contrastive * self.contrastive_loss(pred_encs, target_encs, margin=margin)
 
         # Compute negative sampling loss
-        negative = lambda_negative * self.compute_energy(pred_encs, negative_encs, distance_function)
+        negative = lambda_negative * self.compute_negative_energy(pred_encs, negative_encs, distance_function)
 
         # Total loss
         loss = energy + var + cov + contrastive + negative
@@ -439,3 +446,55 @@ class JEPA_Model(nn.Module):
         else:
             return (loss, energy, var, cov, contrastive, negative)
 
+
+class Prober(torch.nn.Module):
+    def __init__(
+        self,
+        embedding: int,
+        arch: str,
+        output_shape: List[int],
+    ):
+        super().__init__()
+        
+        # Debugging: Print the type and value of output_shape
+        print(f"Prober __init__: Received output_shape type: {type(output_shape)}, value: {output_shape}")
+        
+        # Convert output_shape to list if it's a tuple or torch.Size
+        if isinstance(output_shape, (torch.Size, tuple)):
+            output_shape = list(output_shape)
+            print(f"Prober __init__: Converted output_shape to list: {output_shape}")
+        elif isinstance(output_shape, list):
+            print(f"Prober __init__: output_shape is already a list: {output_shape}")
+        else:
+            raise TypeError(f"Prober __init__: output_shape must be a list, tuple, or torch.Size, got {type(output_shape)}")
+        
+        # Assert that all elements in output_shape are integers
+        if not all(isinstance(x, int) for x in output_shape):
+            raise TypeError("Prober __init__: All elements in output_shape must be integers.")
+        
+        self.output_dim = int(np.prod(output_shape))  # Ensure output_dim is integer
+        print(f"Prober __init__: Calculated output_dim={self.output_dim}")
+        self.output_shape = output_shape
+        self.arch = arch
+
+        arch_list = list(map(int, arch.split("-"))) if arch != "" else []
+        f = [embedding] + arch_list + [self.output_dim]
+        print(f"Prober __init__: Architecture dimensions: {f}")
+        
+        layers = []
+        for i in range(len(f) - 2):
+            in_features = f[i]
+            out_features = f[i + 1]
+            print(f"Prober __init__: Adding Linear layer with in_features={in_features}, out_features={out_features}")
+            layers.append(torch.nn.Linear(in_features, out_features))
+            layers.append(torch.nn.ReLU(True))
+        # Final Linear layer
+        in_features = f[-2]
+        out_features = f[-1]
+        print(f"Prober __init__: Adding final Linear layer with in_features={in_features}, out_features={out_features}")
+        layers.append(torch.nn.Linear(in_features, out_features))
+        self.prober = torch.nn.Sequential(*layers)
+
+    def forward(self, e):
+        output = self.prober(e)
+        return output
