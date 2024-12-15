@@ -72,7 +72,7 @@ class Trainer:
 
     def train(self):
         train_loader, val_train_ds, val_val_ds = self.load_data()
-        model = JEPA_Model(device=self.device, repr_dim=256, action_dim=2, dropout_prob=0).to(self.device)
+        model = JEPA_Model(device=self.device, repr_dim=self.config["repr_dim"], action_dim=2, dropout_prob=0.1).to(self.device)
 
         optimizer = optim.Adam(model.parameters(), lr=self.config["learning_rate"], weight_decay=1e-4)
         # scheduler = get_cosine_schedule_with_warmup(optimizer, 
@@ -170,6 +170,7 @@ def main():
         "save_every": 1,
         'margin': 0.5,
         'distance_function': 'l2',
+        'repr_dim': 128,
     }
 
     wandb.init(
