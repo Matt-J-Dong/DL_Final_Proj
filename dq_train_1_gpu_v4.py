@@ -16,7 +16,7 @@ import torch.multiprocessing as mp
 from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR, LambdaLR
 #import wandb
 import math
-from main_jc import load_data as load_validation_data, evaluate_model
+from main_dq import load_data as load_validation_data, evaluate_model
 from evaluator_jc import ProbingEvaluator
 from dq_model_v2 import BYOL
 
@@ -27,7 +27,7 @@ class Trainer:
         print(f"Using device: {self.device}")
     
     def load_data(self):
-        data_path = "./data/DL24FA"
+        data_path = "data/DL24FA"
 
         full_loader = create_wall_dataloader(
             data_path=f"{data_path}/train",
@@ -100,19 +100,20 @@ def main():
     config = {
         "batch_size": 512,
         "num_epochs": 20,
-        "learning_rate": 1e-5,
+        "learning_rate": 2e-4,
         # 'step_per_epoch': 1000,
         "momentum": 0.996,
         "split_ratio": 1.0,
-        "lambda_energy": 1.0,
+        "lambda_energy": 25.0,
         "lambda_var": 25.0,
-        "lambda_cov": 1.0,
-        'lambda_contrastive': 1.0,
+        "lambda_cov": 5.0,
+        'lambda_contrastive': 0.1,
         "max_grad_norm": 1.0,
         "min_variance": 1.0,
         "save_every": 1,
         'margin': 0.5,
         'distance_function': 'l2',
+        'repr_dim': 128,
     }
 
 
