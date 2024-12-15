@@ -3,7 +3,8 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchvision.models import resnet18, ResNet18_Weights
+from torchvision.models import resnet18
+from torchvision.transforms import Compose, RandomResizedCrop, RandomHorizontalFlip, GaussianBlur, Normalize
 from torch.utils.data import DataLoader, random_split
 from tqdm.auto import tqdm
 import os
@@ -27,8 +28,7 @@ class BYOL(nn.Module):
         """
         super(BYOL, self).__init__()
         # Online network components
-        # Update to use 'weights=None' to avoid deprecation warnings
-        self.online_encoder = base_encoder(weights=None)
+        self.online_encoder = base_encoder(pretrained=False)
         # Modify the first convolution layer to accept 2 channels instead of 3
         self.online_encoder.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.online_encoder.fc = nn.Identity()  # Remove the classification head
@@ -48,7 +48,7 @@ class BYOL(nn.Module):
         )
         
         # Target network components
-        self.target_encoder = base_encoder(weights=None)
+        self.target_encoder = base_encoder(pretrained=False)
         self.target_encoder.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.target_encoder.fc = nn.Identity()  # Remove the classification head
         
@@ -154,17 +154,16 @@ class BYOLAugmentations:
         # Apply augmentation per image
         augmented = []
         for idx, img in enumerate(x):
-            # Debugging: Print image shape before any augmentation
-            print(f"Augmenting image {idx} - Original shape: {img.shape}")
+            # Debugging: Print image shape
+            # print(f"Augmenting image {idx} with shape: {img.shape}")  # Uncomment for debugging
 
-            # Clone the image to ensure it's writable
+            # Ensure the tensor is writable by making a copy
             img = img.clone()
 
             # Apply RandomResizedCrop
             try:
                 i, j, h, w = RandomResizedCrop.get_params(img, scale=(0.2, 1.0), ratio=(3./4., 4./3.))
                 img = F.resized_crop(img, i, j, h, w, self.image_size, interpolation=F.InterpolationMode.BILINEAR)
-                print(f"Augmenting image {idx} - After RandomResizedCrop: {img.shape}")
             except Exception as e:
                 print(f"Error in RandomResizedCrop for image {idx}: {e}")
                 raise e
@@ -172,17 +171,9 @@ class BYOLAugmentations:
             # Apply RandomHorizontalFlip
             if torch.rand(1).item() < 0.5:
                 img = F.hflip(img)
-                print(f"Augmenting image {idx} - After RandomHorizontalFlip: {img.shape}")
-            else:
-                print(f"Augmenting image {idx} - RandomHorizontalFlip skipped")
 
             # Apply GaussianBlur
-            try:
-                img = F.gaussian_blur(img, kernel_size=3, sigma=(0.1, 2.0))
-                print(f"Augmenting image {idx} - After GaussianBlur: {img.shape}")
-            except Exception as e:
-                print(f"Error in GaussianBlur for image {idx}: {e}")
-                raise e
+            img = F.gaussian_blur(img, kernel_size=3, sigma=(0.1, 2.0))
 
             # Normalize
             if img.shape[0] == 2:
@@ -196,7 +187,6 @@ class BYOLAugmentations:
                 std = (0.5, 0.5, 0.5)
             try:
                 img = F.normalize(img, mean=mean, std=std)
-                print(f"Augmenting image {idx} - After Normalization: {img.shape}")
             except Exception as e:
                 print(f"Error in normalization for image {idx}: {e}")
                 print(f"Image shape: {img.shape}, mean: {mean}, std: {std}")
@@ -204,7 +194,6 @@ class BYOLAugmentations:
 
             augmented.append(img)
         augmented = torch.stack(augmented).to(x.device)
-        print(f"Augmented batch shape: {augmented.shape}")
         return augmented
 
 # Trainer class
@@ -376,15 +365,12 @@ class Trainer:
             print("Inspecting 'locations' tensor in training dataset:")
             # Inspect a sample from the probing training dataset
             if hasattr(self.probe_train_dataset, '__getitem__'):
-                try:
-                    sample = self.probe_train_dataset[0]
-                    locations = getattr(sample, "locations", None)
-                    if locations is not None and locations.numel() > 0:
-                        print(f"Probing Training sample 'locations' shape: {locations.shape}")
-                    else:
-                        print("Probing Training sample does not have 'locations' attribute or it's empty.")
-                except Exception as ex:
-                    print(f"Error accessing first sample in probe_train_dataset: {ex}")
+                sample = self.probe_train_dataset[0]
+                locations = getattr(sample, "locations", None)
+                if locations is not None and locations.numel() > 0:
+                    print(f"Probing Training sample 'locations' shape: {locations.shape}")
+                else:
+                    print("Probing Training sample does not have 'locations' attribute or it's empty.")
             print("Inspecting 'locations' tensors in validation datasets:")
             for key, val_ds in self.val_loader.items():
                 if hasattr(val_ds, '__iter__'):
@@ -423,7 +409,7 @@ class Trainer:
 
         # Append losses to a text file for record-keeping
         with open(f"losses_model_{self.config['model_version']}.txt", "a") as f:
-            print(f"Writing to file: losses_model_{self.config['model_version']}.txt")
+            print(f"Writing file: {f}")
             f.write(f"Epoch {epoch}: train_loss={avg_epoch_loss}, val_loss_normal={val_loss_normal}, val_loss_wall={val_loss_wall}, probing_lr={current_probe_lr}\n")
 
     def train(self):
@@ -447,7 +433,6 @@ class Trainer:
                 if x is None:
                     print("Batch does not have 'states' attribute. Skipping this batch.")
                     continue
-
                 # Fix non-writable tensor warning by making a writable copy
                 if not x.is_contiguous():
                     x = x.contiguous()
@@ -458,7 +443,6 @@ class Trainer:
 
                 # Apply two separate augmentations
                 try:
-                    print(f"Batch {batch_idx} - Applying augmentations to the batch.")
                     x1 = self.augmentations(x)
                     x2 = self.augmentations(x)
                 except Exception as e:
@@ -558,9 +542,6 @@ def main():
 
     # Initialize data augmentations
     config['augmentations'] = BYOLAugmentations(image_size=36)  # Adjust image_size based on your dataset
-
-    # Ensure the save directory exists
-    os.makedirs(config["save_dir"], exist_ok=True)
 
     # Initialize and start training
     wandb.init(
