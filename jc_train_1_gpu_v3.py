@@ -75,12 +75,12 @@ class Trainer:
         model = JEPA_Model(device=self.device, repr_dim=256, action_dim=2, dropout_prob=0).to(self.device)
 
         optimizer = optim.Adam(model.parameters(), lr=self.config["learning_rate"], weight_decay=1e-4)
-        scheduler = get_cosine_schedule_with_warmup(optimizer, 
-                                                    num_warmup_steps=10, 
-                                                    num_training_steps=self.config["num_epochs"] * len(train_loader), 
-                                                    initial_lr=self.config["learning_rate"], 
-                                                    final_lr=1e-8)
-        # scheduler = CosineAnnealingLR(optimizer, T_max=self.config["num_epochs"], eta_min=1e-6)
+        # scheduler = get_cosine_schedule_with_warmup(optimizer, 
+        #                                             num_warmup_steps=10, 
+        #                                             num_training_steps=self.config["num_epochs"] * len(train_loader), 
+        #                                             initial_lr=self.config["learning_rate"], 
+        #                                             final_lr=1e-8)
+        scheduler = CosineAnnealingLR(optimizer, T_max=self.config["num_epochs"], eta_min=1e-6)
         # optimizer = torch.optim.SGD(model.parameters(), lr=self.config['learning_rate'], momentum=self.config['momentum'], weight_decay=1e-4)
         # scheduler = StepLR(optimizer, step_size=50, gamma=0.4)  # Reduce LR by 50% every 5 epochs
 
@@ -134,15 +134,23 @@ class Trainer:
 
 
 # Define the learning rate scheduler with warmup and cosine decay
-def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, num_cycles=0.5, last_epoch=-1, initial_lr=1e-3, final_lr=1e-4):
+def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, num_cycles=1.0, last_epoch=-1, initial_lr=1e-3, final_lr=1e-4, peak_lr=None):
+    if peak_lr is None:
+        peak_lr = initial_lr  # Option to cap warm-up peak
+    
     def lr_lambda(current_step):
         if current_step < num_warmup_steps:
-            lr = initial_lr * float(current_step) / float(max(1, num_warmup_steps))
+            # Quadratic warm-up to avoid rapid initial increase
+            lr = peak_lr * (current_step / num_warmup_steps) ** 2
         else:
+            # Smooth cosine decay with adjustable cycles
             progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
-            lr = final_lr + 5 * (initial_lr - final_lr) * (1.0 + math.cos(math.pi * progress))
+            progress *= num_cycles
+            lr = final_lr + (peak_lr - final_lr) * (1.0 + math.cos(math.pi * progress)) / 2.0
         return lr / initial_lr  # Return multiplicative factor
+
     return LambdaLR(optimizer, lr_lambda, last_epoch)
+
 
 
 def main():
