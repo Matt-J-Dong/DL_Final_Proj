@@ -27,7 +27,7 @@ class Trainer:
         print(f"Using device: {self.device}")
     
     def load_data(self):
-        data_path = "/scratch/DL24FA"
+        data_path = "./data/DL24FA"
 
         full_loader = create_wall_dataloader(
             data_path=f"{data_path}/train",
