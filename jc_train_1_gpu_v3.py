@@ -10,6 +10,8 @@ import torch.multiprocessing as mp
 from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR, LambdaLR
 import wandb
 import math
+from main_jc import load_data as load_validation_data, evaluate_model
+from evaluator import ProbingEvaluator
 
 class Trainer:
     def __init__(self, config):
@@ -30,11 +32,13 @@ class Trainer:
 
         full_dataset = full_loader.dataset
         train_size = int(self.config["split_ratio"] * len(full_dataset))
-        val_size = len(full_dataset) - train_size
 
         train_loader = DataLoader(full_dataset, batch_size=self.config["batch_size"], shuffle=True)
 
-        return train_loader
+        # validation datasets
+        val_train_ds, val_val_ds = load_validation_data(self.device)
+
+        return train_loader, val_train_ds, val_val_ds
 
     def save_model(self, model, epoch):
         save_path = self.config.get("save_path", "checkpoints")
@@ -43,35 +47,31 @@ class Trainer:
         torch.save(model.state_dict(), save_file)
         print(f"Model saved to {save_file}")
 
-    def validate_model(self, model, val_loader):
+    def validate_model(self, model, val_train_ds, val_val_ds):
         model.eval()
         val_loss, var_culm, cov_culm = 0.0, 0.0, 0.0
 
         with torch.no_grad():
-            for batch in tqdm(val_loader, desc="Validating", leave=False):
-                states, actions = batch.states.to(self.device), batch.actions.to(self.device)
-                init_state = states[:, 0]
+            evaluator = ProbingEvaluator(
+            device=self.device,
+            model=model,
+            probe_train_ds=val_train_ds,
+            probe_val_ds=val_val_ds,
+            quick_debug=False,
+        )
 
-                # Slice actions for T-1 timesteps
-                pred_encs = model.forward(init_state, actions[:, :-1])
+        prober = evaluator.train_pred_prober()
 
-                # Compute target encodings for all T timesteps
-                target_encs = torch.stack([model.target_encoder(states[:, t]) for t in range(actions.size(1) + 1)], dim=1)
+        avg_losses = evaluator.evaluate_all(prober=prober)
 
-                # Compute loss
-                loss, _, var, cov, _ = model.compute_loss(
-                    pred_encs, target_encs[:, :pred_encs.size(1)], debug=True, **self.config
-                )
-                val_loss += loss.item()
-                var_culm += var
-                cov_culm += cov
+        for probe_attr, loss in avg_losses.items():
+            print(f"{probe_attr} loss: {loss}")
+            wandb.log({f"val_{probe_attr}_loss": loss})
 
-        print(f"Validation Variance: {var_culm / len(val_loader)}, Covariance: {cov_culm / len(val_loader)}")
-        return val_loss / len(val_loader)
 
 
     def train(self):
-        train_loader = self.load_data()
+        train_loader, val_train_ds, val_val_ds = self.load_data()
         model = JEPA_Model(device=self.device, repr_dim=256, action_dim=2, dropout_prob=0).to(self.device)
 
         optimizer = optim.Adam(model.parameters(), lr=self.config["learning_rate"], weight_decay=1e-4)
@@ -113,7 +113,7 @@ class Trainer:
                 if batch_idx % 100 == 0:
                     print(f"Epoch [{epoch}/{self.config['num_epochs']}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}")
                     self.save_model(model, f"{epoch}_batch_{batch_idx}")
-                    # val_loss = self.validate_model(model, val_loader)
+                    self.validate_model(model, val_train_ds, val_val_ds)
                     # wandb.log({"val_loss": val_loss})
 
             avg_epoch_loss = epoch_loss / len(train_loader)
@@ -122,7 +122,7 @@ class Trainer:
 
             if epoch % self.config["save_every"] == 0:
                 self.save_model(model, epoch)
-                # val_loss = self.validate_model(model, val_loader)
+                self.validate_model(model, val_train_ds, val_val_ds)
                 # wandb.log({"val_loss": val_loss})
 
         print("Training completed.")
