@@ -11,7 +11,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR, Lambda
 import wandb
 import math
 from main_jc import load_data as load_validation_data, evaluate_model
-from evaluator import ProbingEvaluator
+from evaluator_jc import ProbingEvaluator
 
 class Trainer:
     def __init__(self, config):
@@ -53,12 +53,12 @@ class Trainer:
 
         with torch.no_grad():
             evaluator = ProbingEvaluator(
-            device=self.device,
-            model=model,
-            probe_train_ds=val_train_ds,
-            probe_val_ds=val_val_ds,
-            quick_debug=False,
-        )
+                device=self.device,
+                model=model,
+                probe_train_ds=val_train_ds,
+                probe_val_ds=val_val_ds,
+                quick_debug=False,
+            )
 
         prober = evaluator.train_pred_prober()
 
