@@ -50,7 +50,7 @@ def main():
                 device=self.device,
                 train=True,
                 batch_size=self.config["batch_size"],  # Ensure batch_size is specified
-                num_workers=8  # Set to 16 CPU workers
+                num_workers=2  # Set to 16 CPU workers
             )
 
             # Create Probing Training DataLoader with probing=True and specified batch_size
@@ -60,7 +60,7 @@ def main():
                 device=self.device,
                 train=True,
                 batch_size=self.config["batch_size"],  # **Added batch_size**
-                num_workers=8  # Set to 16 CPU workers
+                num_workers=2  # Set to 16 CPU workers
             )
 
             # Create Validation DataLoaders with probing=True and specified batch_size
@@ -70,7 +70,7 @@ def main():
                 device=self.device,
                 train=False,
                 batch_size=self.config["batch_size"],  # **Added batch_size**
-                num_workers=8  # Set to 16 CPU workers
+                num_workers=2  # Set to 16 CPU workers
             )
 
             probe_val_wall_ds = create_wall_dataloader(
@@ -79,7 +79,7 @@ def main():
                 device=self.device,
                 train=False,
                 batch_size=self.config["batch_size"],  # **Added batch_size**
-                num_workers=8  # Set to 16 CPU workers
+                num_workers=2  # Set to 16 CPU workers
             )
 
             val_loader = {"normal": probe_val_normal_ds, "wall": probe_val_wall_ds}
