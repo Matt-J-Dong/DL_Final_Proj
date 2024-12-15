@@ -163,7 +163,7 @@ def main():
         "split_ratio": 1.0,
         "lambda_energy": 10.0,
         "lambda_var": 10.0,
-        "lambda_cov": 1.0,
+        "lambda_cov": 10.0,
         'lambda_contrastive': 0.1,
         "max_grad_norm": 1.0,
         "min_variance": 1.0,
