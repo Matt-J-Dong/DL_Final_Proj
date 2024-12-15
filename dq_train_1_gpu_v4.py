@@ -16,7 +16,7 @@ import torch.multiprocessing as mp
 from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR, LambdaLR
 #import wandb
 import math
-from main_jc import load_data as load_validation_data, evaluate_model
+from main_dq import load_data as load_validation_data, evaluate_model
 from evaluator_jc import ProbingEvaluator
 from dq_model_v2 import BYOL
 
