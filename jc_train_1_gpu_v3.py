@@ -149,7 +149,7 @@ def main():
     config = {
         "batch_size": 512,
         "num_epochs": 20,
-        "learning_rate": 2e-4,
+        "learning_rate": 2e-5,
         # 'step_per_epoch': 1000,
         "momentum": 0.996,
         "split_ratio": 1.0,
