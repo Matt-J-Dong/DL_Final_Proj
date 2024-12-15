@@ -281,7 +281,7 @@ class Trainer:
                 if locations is not None and locations.numel() > 0:
                     print(f"{name} 'locations' shape: {locations.shape}")
                 else:
-                    print(f"{name} does not have 'locations' attribute or it's empty.")
+                    print(f"{name} does not have 'locations' attribute or it's empty, so the shape is [{batch_size},0]")
             except Exception as e:
                 print(f"Error inspecting {name} DataLoader: {e}")
 
