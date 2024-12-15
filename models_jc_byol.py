@@ -26,31 +26,50 @@ class Encoder(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-        self.layer1 = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True)
+        # Residual block 1
+        self.res_block1 = nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(64),
         )
-        self.layer2 = nn.Sequential(
-            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True)
+
+        # Residual block 2
+        self.res_block2 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(128),
         )
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(256, output_dim)
+        self.fc = nn.Linear(128, output_dim)
 
     def forward(self, x):
+        # Initial convolution and pooling
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
+
+        # Residual block 1
+        identity = x
+        out = self.res_block1(x)
+        x = self.relu(out + identity)
+
+        # Residual block 2
+        identity = x
+        out = self.res_block2(x)
+        x = self.relu(out + identity)
+
+        # Global average pooling and projection
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
         return x
+
 
 
 class Predictor(nn.Module):
@@ -246,8 +265,7 @@ class JEPA_Model(nn.Module):
 
 
         loss = self.compute_loss(pred_encs, 
-                                target_encs, 
-                                distance_function, )
+                                target_encs,)
         
         if debug:
             energy = self.compute_energy(pred_encs, target_encs, distance_function)
@@ -267,10 +285,10 @@ class JEPA_Model(nn.Module):
 
         scheduler.step()
 
-        # Update target encoder using momentum
-        with torch.no_grad():
-            for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
-                param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
+        # # Update target encoder using momentum
+        # with torch.no_grad():
+        #     for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
+        #         param_k.data = momentum * param_k.data + (1 - momentum) * param_q.data
 
         return loss.item() if not debug else (loss.item(), energy.item(), variance.item(), covariance.item())
 
