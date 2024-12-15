@@ -50,6 +50,7 @@ def create_wall_dataloader(
     device="cuda",
     batch_size=64,
     train=True,
+    num_workers=0
 ):
     ds = WallDataset(
         data_path=data_path,
@@ -63,7 +64,7 @@ def create_wall_dataloader(
         shuffle=train,
         drop_last=True,
         pin_memory=False,
-        num_workers=8
+        num_workers=num_workers
     )
 
     return loader
