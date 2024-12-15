@@ -27,7 +27,7 @@ class Encoder(nn.Module):
         # ResNet-like layers
         self.layer1 = self._make_layer(BasicBlock, in_channels=64, out_channels=64, num_blocks=2, stride=1)
         self.layer2 = self._make_layer(BasicBlock, in_channels=64, out_channels=128, num_blocks=2, stride=2)
-        self.layer3 = self._make_layer(BasicBlock, in_channels=128, out_channels=256, num_blocks=2, stride=2)
+        # self.layer3 = self._make_layer(BasicBlock, in_channels=128, out_channels=256, num_blocks=2, stride=2)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(256, output_dim)
@@ -57,7 +57,7 @@ class Encoder(nn.Module):
         x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
-        x = self.layer3(x)
+        # x = self.layer3(x)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
