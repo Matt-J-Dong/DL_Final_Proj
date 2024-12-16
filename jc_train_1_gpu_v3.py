@@ -170,7 +170,7 @@ def main():
         "save_every": 1,
         'margin': 0.5,
         'distance_function': 'mse',
-        'repr_dim': 128,
+        'repr_dim': 256,
     }
 
     wandb.init(
