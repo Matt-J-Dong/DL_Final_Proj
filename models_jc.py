@@ -105,7 +105,7 @@ class JEPA_Model(nn.Module):
             param.requires_grad = False
 
 
-    def forward(self, init_state, actions):
+    def forward(self, states, actions):
         """
         Args:
             init_state: [B, C, H, W]
@@ -118,7 +118,7 @@ class JEPA_Model(nn.Module):
         T = T_minus_one + 1
         pred_encs = []
 
-        s_prev = self.encoder(init_state)
+        s_prev = self.encoder(states)
         # s_prev = self.expander(s_prev)  # Pass encoder output through expander
         s_prev = self.batch_norm(s_prev)  # Apply BatchNorm to embeddings
         pred_encs.append(s_prev)
