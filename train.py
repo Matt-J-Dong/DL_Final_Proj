@@ -157,7 +157,7 @@ def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_st
 def main():
     config = {
         "batch_size": 512,
-        "num_epochs": 20,
+        "num_epochs": 6,
         "learning_rate": 2e-4,
         # 'step_per_epoch': 1000,
         "momentum": 0.996,
