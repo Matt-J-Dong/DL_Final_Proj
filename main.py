@@ -79,7 +79,7 @@ def load_model():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = JEPA_Model()
     # Load the saved model weights
-    state_dict = torch.load('./jepa_model_final.pth', map_location=device)
+    state_dict = torch.load('./model_weights.pth', map_location=device)
     
     # Handle potential 'module.' prefix in state_dict keys
     from collections import OrderedDict
