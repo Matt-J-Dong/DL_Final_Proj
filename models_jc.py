@@ -19,15 +19,17 @@ def build_mlp(layers_dims: List[int]):
 class Encoder(nn.Module):
     def __init__(self, output_dim=256, dropout_prob=0.1):
         super(Encoder, self).__init__()
-        # Use ResNet-50 as the backbone
+        # Load ResNet-50 without pretrained weights
         resnet = resnet50(pretrained=False)
-        self.backbone = nn.Sequential(*list(resnet.children())[:-2])  # Remove fully connected and pooling layers
-        
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))  # Keep the adaptive pooling
-        self.fc = nn.Linear(resnet.fc.in_features, output_dim)  # Output to desired dimensionality
+        # Modify the first convolutional layer to accept the required input channels
+        resnet.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        # Remove the final fully connected layer and average pooling
+        self.features = nn.Sequential(*list(resnet.children())[:-2])  # Exclude avgpool and fc
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))  # Global average pooling
+        self.fc = nn.Linear(resnet.fc.in_features, output_dim)  # Replace with custom FC layer
 
     def forward(self, x):
-        x = self.backbone(x)
+        x = self.features(x)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
