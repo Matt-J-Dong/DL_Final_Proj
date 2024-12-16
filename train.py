@@ -20,7 +20,7 @@ class Trainer:
         print(f"Using device: {self.device}")
 
     def load_data(self):
-        data_path = "./data/DL24FA"
+        data_path = "/scratch/DL24FA"
 
         full_loader = create_wall_dataloader(
             data_path=f"{data_path}/train",
@@ -66,7 +66,7 @@ class Trainer:
 
         for probe_attr, loss in avg_losses.items():
             print(f"{probe_attr} loss: {loss}")
-            wandb.log({f"val_{probe_attr}_loss": loss})
+            #wandb.log({f"val_{probe_attr}_loss": loss})
 
 
 
@@ -104,12 +104,13 @@ class Trainer:
                 epoch_loss += loss
 
                 if batch_idx % 10 == 0 or batch_idx == len(train_loader) - 1:
-                    wandb.log({"loss": loss, 
-                               "energy_loss": e_loss, 
-                               "variance_loss": var_loss, 
-                               "covariance_loss": cov_loss,
-                               "contrastive_loss": contra_loss,
-                               'lr': optimizer.param_groups[0]['lr']})
+                    pass
+                    # wandb.log({"loss": loss, 
+                    #            "energy_loss": e_loss, 
+                    #            "variance_loss": var_loss, 
+                    #            "covariance_loss": cov_loss,
+                    #            "contrastive_loss": contra_loss,
+                    #            'lr': optimizer.param_groups[0]['lr']})
 
                 if batch_idx % 100 == 0 and batch_idx != 0:
                     print(f"Epoch [{epoch}/{self.config['num_epochs']}], Batch [{batch_idx}/{len(train_loader)}], Loss: {loss:.4f}")

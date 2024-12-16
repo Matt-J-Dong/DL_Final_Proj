@@ -39,8 +39,8 @@ default_config = ProbingConfig()
 
 def location_losses(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     # EDITED: added print statement for debugging purposes
-    if pred.shape != target.shape:
-        print(f"Shape mismatch: pred.shape={pred.shape}, target.shape={target.shape}")
+    # if pred.shape != target.shape:
+    #     print(f"Shape mismatch: pred.shape={pred.shape}, target.shape={target.shape}")
     assert pred.shape == target.shape
     mse = (pred - target).pow(2).mean(dim=0)
     return mse
@@ -115,7 +115,7 @@ class ProbingEvaluator:
             for batch in tqdm(dataset, desc="Probe prediction step"):
                 ################################################################################
                 # TODO: Forward pass through your model
-                # EDITED
+                #Actions is defined on a separate line. This is the only thing that has been changed.
                 init_state = batch.states[:, 0]  # [B, C, H, W]
                 actions = batch.actions  # [B, T-1, action_dim]
                 pred_encs = model(init_state, actions)  # [B, T, D]
@@ -132,10 +132,7 @@ class ProbingEvaluator:
                 losses_list = []
 
                 target = getattr(batch, "locations").cuda()
-                target = self.normalizer.normalize_location(target)
-                # #EDITED
-                # target = target[:, :-1]
-                
+                target = self.normalizer.normalize_location(target)                
 
                 if (
                     config.sample_timesteps is not None
@@ -219,7 +216,7 @@ class ProbingEvaluator:
             ################################################################################
             # TODO: Forward pass through your model
 
-            #EDITED
+            #Actions is defined on a separate line. This is the only thing that has been changed.
             init_state = batch.states[:, 0]  # [B, C, H, W]
             actions = batch.actions  # [B, T-1, action_dim]
             pred_encs = model(init_state, actions)  # [B, T, D]
