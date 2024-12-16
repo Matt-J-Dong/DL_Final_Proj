@@ -201,25 +201,25 @@ class JEPA_Model(nn.Module):
     
     def compute_loss(self, pred_encs, target_encs):
         """
-        Compute the JEPA energy loss without any additional regularization.
+        Compute the L2 distance loss between predicted and target embeddings.
 
         Args:
             pred_encs: Predicted embeddings (B, T, D).
             target_encs: Target embeddings (B, T, D).
 
         Returns:
-            loss: Mean squared error loss between predicted and target embeddings.
+            loss: Mean L2 distance between predicted and target embeddings.
         """
-
         # Flatten embeddings to compute loss across all timesteps
         pred_encs_flat = pred_encs.view(-1, pred_encs.size(-1))  # [B*T, D]
         target_encs_flat = target_encs.view(-1, target_encs.size(-1))  # [B*T, D]
 
-        # === Energy Loss ===
-        # Mean squared error between predicted and target embeddings
-        loss = F.mse_loss(pred_encs_flat, target_encs_flat)
+        # Compute L2 distance
+        l2_distance = torch.norm(pred_encs_flat - target_encs_flat, p=2, dim=1)  # [B*T]
 
-        return loss
+        # Return mean L2 distance as loss
+        return l2_distance.mean()
+
     
     def compute_variance(self, pred_encs):
         """
