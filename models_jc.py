@@ -19,45 +19,15 @@ def build_mlp(layers_dims: List[int]):
 class Encoder(nn.Module):
     def __init__(self, output_dim=256, dropout_prob=0.1):
         super(Encoder, self).__init__()
-        self.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-
-        # ResNet-like layers
-        self.layer1 = self._make_layer(BasicBlock, in_channels=64, out_channels=64, num_blocks=2, stride=1)
-        self.layer2 = self._make_layer(BasicBlock, in_channels=64, out_channels=128, num_blocks=2, stride=2)
-        # self.layer3 = self._make_layer(BasicBlock, in_channels=128, out_channels=256, num_blocks=2, stride=2)
-
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(128, output_dim)
-
-    def _make_layer(self, block, in_channels, out_channels, num_blocks, stride=1):
-        downsample = None
-        # Add a downsample layer if channel dimensions or spatial dimensions differ
-        if stride != 1 or in_channels != out_channels:
-            downsample = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(out_channels),
-            )
-
-        layers = []
-        # First block with downsample (if needed)
-        layers.append(block(in_channels, out_channels, stride=stride, downsample=downsample))
-        # Subsequent blocks
-        for _ in range(1, num_blocks):
-            layers.append(block(out_channels, out_channels))
-
-        return nn.Sequential(*layers)
+        # Use ResNet-50 as the backbone
+        resnet = resnet50(pretrained=False)
+        self.backbone = nn.Sequential(*list(resnet.children())[:-2])  # Remove fully connected and pooling layers
+        
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))  # Keep the adaptive pooling
+        self.fc = nn.Linear(resnet.fc.in_features, output_dim)  # Output to desired dimensionality
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        # x = self.layer3(x)
+        x = self.backbone(x)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
@@ -117,9 +87,8 @@ class JEPA_Model(nn.Module):
         self.action_dim = action_dim
         self.dropout_prob = dropout_prob
 
+        # Use the modified Encoder with ResNet-50
         self.encoder = Encoder(output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
-
-        # self.expander = Expander(input_dim=repr_dim, hidden_dim=1024, output_dim=repr_dim, dropout_prob=dropout_prob).to(device)
 
         self.predictor = Predictor(input_dim=repr_dim + action_dim, output_dim=repr_dim, hidden_dim=1024, dropout_prob=dropout_prob).to(device)
 
