@@ -10,8 +10,8 @@ import torch.multiprocessing as mp
 from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR, LambdaLR
 import wandb
 import math
-from main_jc import load_data as load_validation_data, evaluate_model
-from evaluator_jc import ProbingEvaluator
+from main import load_data as load_validation_data, evaluate_model
+from evaluator import ProbingEvaluator
 
 class Trainer:
     def __init__(self, config):
