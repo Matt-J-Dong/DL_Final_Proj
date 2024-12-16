@@ -8,7 +8,7 @@ from dataset import create_wall_dataloader
 from models_jc import JEPA_Model
 import torch.multiprocessing as mp
 from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, StepLR, LambdaLR
-import wandb
+# import wandb
 import math
 from main import load_data as load_validation_data, evaluate_model
 from evaluator import ProbingEvaluator
