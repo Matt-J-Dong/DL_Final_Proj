@@ -252,6 +252,9 @@ class JEPA_Model(nn.Module):
         """
         if distance_function == "l2":
             energy = torch.sum((predicted_encs - target_encs) ** 2) / (predicted_encs.size(0) * predicted_encs.size(1))
+
+        elif distance_function == 'mse':
+            energy = torch.nn.functional.mse_loss(predicted_encs, target_encs)
         elif distance_function == "cosine":
             cos = nn.CosineSimilarity(dim=-1)
             energy = -torch.sum(cos(predicted_encs, target_encs)) / (predicted_encs.size(0) * predicted_encs.size(1))

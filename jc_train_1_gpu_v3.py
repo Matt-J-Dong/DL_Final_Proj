@@ -169,7 +169,7 @@ def main():
         "min_variance": 1.0,
         "save_every": 1,
         'margin': 0.5,
-        'distance_function': 'l2',
+        'distance_function': 'mse',
         'repr_dim': 128,
     }
 
